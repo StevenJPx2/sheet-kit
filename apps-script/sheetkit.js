@@ -201,6 +201,12 @@ function renderTab(spreadsheet, spec, values) {
   var width = written.width;
   var columns = spec.columns || [];
 
+  // Header rows are bold + centered by default (universal sheet convention).
+  var headerRowCount = spec.header_row || 1;
+  if (written.rows > 0) {
+    sheet.getRange(1, 1, headerRowCount, width).setFontWeight('bold').setHorizontalAlignment('center');
+  }
+
   // header merges span the GROUP-header row (row 1) — the top of a 2-row header
   // holds the group labels (RPV/AOV/…); the column-name row sits below it.
   if (spec.header_merges) {
