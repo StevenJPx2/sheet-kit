@@ -43,6 +43,21 @@ function columnIndex_(columns, name) {
   return 0;
 }
 
+/**
+ * resolveFormula_ turns a name-based formula into a Sheets formula for one data
+ * row: each {ColumnName} becomes the A1 cell of that column on `sheetRow`.
+ * `=IFERROR({Revenue}/{Sessions},"")` on row 8 → `=IFERROR(AI8/AG8,"")`.
+ * This is what kills the off-by-one A1-letter bug class: mpd never writes A1.
+ * An unknown column name resolves to #REF! so the sheet flags it loudly.
+ */
+function resolveFormula_(formula, columns, sheetRow) {
+  return formula.replace(/\{([^}]+)\}/g, function (_, name) {
+    var idx = columnIndex_(columns, name);
+    if (idx === 0) return '#REF!';
+    return columnName_(idx) + sheetRow;
+  });
+}
+
 // --- primitives -------------------------------------------------------------
 
 function skWriteTable_(sheet, values) {
@@ -249,5 +264,5 @@ function renderTab(spreadsheet, spec, values) {
 
 // CommonMS/Node test hook (Apps Script ignores module).
 if (typeof module !== 'undefined') {
-  module.exports = { columnName_: columnName_, columnIndex_: columnIndex_, normalizeWidth_: normalizeWidth_, matchLabel_: matchLabel_ };
+  module.exports = { columnName_: columnName_, columnIndex_: columnIndex_, normalizeWidth_: normalizeWidth_, matchLabel_: matchLabel_, resolveFormula_: resolveFormula_ };
 }

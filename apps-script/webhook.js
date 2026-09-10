@@ -47,19 +47,36 @@ function doPost(event) {
 
 /**
  * rowsToValues_ turns canonical row objects into the 2D display grid renderTab
- * expects: a header row of column names, then one row per record pulling
- * source_field values. Formula columns are left blank here (the render layer
- * writes their A1 formulas separately once wired); today they resolve to '').
- *
- * ponytail: formula columns render as blank cells until formula emission lands.
- * The header + source_field mapping is what every sheet needs now.
+ * expects:
+ *   - an optional group-header row (when header_row >= 2) built from
+ *     header_merges labels,
+ *   - the column-name header row,
+ *   - one row per record: source_field columns pull the value; formula columns
+ *     emit a Sheets formula with {ColName} resolved to that row's A1 cells.
  */
 function rowsToValues_(spec, rows) {
   var columns = spec.columns || [];
-  var header = columns.map(function (c) { return c.name; });
-  var grid = [header];
-  rows.forEach(function (row) {
+  var headerRows = spec.header_row || 1;
+  var grid = [];
+
+  // Group-header row (row 0) from header_merges labels, when a 2-row header.
+  if (headerRows >= 2 && spec.header_merges) {
+    var groupRow = columns.map(function () { return ''; });
+    spec.header_merges.forEach(function (m) {
+      var from = columnIndex_(columns, m.from);
+      if (from > 0) groupRow[from - 1] = m.label;
+    });
+    grid.push(groupRow);
+  }
+
+  // Column-name header row.
+  grid.push(columns.map(function (c) { return c.name; }));
+
+  // Data rows: source_field value, or a per-row resolved formula.
+  rows.forEach(function (row, i) {
+    var sheetRow = headerRows + 1 + i;
     grid.push(columns.map(function (c) {
+      if (c.formula) return resolveFormula_(c.formula, columns, sheetRow);
       if (c.source_field == null) return '';
       var v = row[c.source_field];
       return v == null ? '' : v;
