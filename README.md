@@ -32,26 +32,38 @@ on both files.
 Cap the manifest at primitives a real sheet actually uses. Add a primitive only
 when a live report needs it. Do not grow this into a general Sheets DSL.
 
+## Build & test
+
+sheet-kit is a plain TypeScript CLI run on Node 24+ — no build step, no compiled
+artifact. Node strips types natively, so `src/cli.ts` runs directly (it has a
+shebang and is the package `bin`). Node is already required here for `clasp`, so
+there's no extra runtime. The renderer is Apps Script (`apps-script/`); the CLI
+is the only host-side code.
+
+```sh
+npm install                  # @types/node + typescript (dev only)
+node --test src/*.test.ts    # unit tests
+npx tsc --noEmit             # typecheck
+./src/cli.ts version         # run directly
+```
+
+Optional: `npm run build` compiles a standalone native binary with
+[scriptc](https://github.com/vercel-labs/scriptc) for a host without Node — but
+its ~800 KB runtime floor makes it a larger artifact than the ~13 KB of source,
+so the default deploy is just the TS on Node. Keep the CLI free of npm runtime
+deps (validation is hand-written against the JSON Schema, not `ajv`) so the
+scriptc escape hatch stays 100% static.
+
 ## Usage
 
 ```sh
 sheet-kit validate --manifest manifest.json [--data data.json]
-sheet-kit publish  --manifest manifest.json --data data.json   # not yet implemented
+sheet-kit publish  --artifact DIR --config webhook.json [--expected-latest DATE]
 sheet-kit version
 ```
 
 `validate` checks manifest invariants (contract version, one value source per
 column, every referenced column name resolves) and, with `--data`, that every
-tab's dataset is present.
-
-## Status
-
-Skeleton. Contract + validation are wired and tested. The publish path (A1
-formula resolution, formatting/gradients/charts, atomic Drive write, webhook
-import + staleness handshake, Apps Script deploy tooling) is stubbed — it lands
-with the `apps-script/` move out of `ga4-querinator`.
-
-```sh
-go test ./...
-go build ./cmd/sheet-kit
-```
+tab's dataset is present. `publish` stages `manifest.json` + `data.json` from
+`--artifact` into the mounted Drive folder (`config.driveDir`) and POSTs the
+generic webhook with the Drive-sync staleness retry loop.

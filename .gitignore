@@ -1,3 +1,4 @@
+/dist/
+/node_modules/
+/.scriptc/
 /out/
-*.test
-/sheet-kit

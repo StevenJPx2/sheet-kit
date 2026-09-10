@@ -1,0 +1,17 @@
+{
+  "name": "sheet-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "sheet-kit": "./src/cli.ts" },
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test": "node --test src/*.test.ts",
+    "check": "tsc --noEmit",
+    "build": "scriptc build src/cli.ts -o dist/sheet-kit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0"
+  }
+}
