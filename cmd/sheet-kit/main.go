@@ -13,9 +13,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/AdeptMind/sheet-kit/internal/manifest"
+	"github.com/AdeptMind/sheet-kit/internal/publish"
 )
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
@@ -77,21 +81,23 @@ func cmdValidate(args []string, stdout, stderr *os.File) int {
 func cmdPublish(args []string, stdout, stderr *os.File) int {
 	fs := flag.NewFlagSet("publish", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	manifestPath := fs.String("manifest", "", "path to manifest.json")
-	dataPath := fs.String("data", "", "path to data.json")
+	artifactDir := fs.String("artifact", "", "directory holding manifest.json + data.json")
+	configPath := fs.String("config", "", "webhook config JSON (url, secret, driveDir)")
+	expectedLatest := fs.String("expected-latest", "", "optional staleness handshake date (YYYY-MM-DD)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if *manifestPath == "" || *dataPath == "" {
-		fmt.Fprintln(stderr, "--manifest and --data are required")
+	if *artifactDir == "" || *configPath == "" {
+		fmt.Fprintln(stderr, "--artifact and --config are required")
 		return 2
 	}
-	m, err := parseManifestFile(*manifestPath)
+
+	m, err := parseManifestFile(filepath.Join(*artifactDir, "manifest.json"))
 	if err != nil {
 		fmt.Fprintf(stderr, "manifest: %v\n", err)
 		return 1
 	}
-	data, err := parseDataFile(*dataPath)
+	data, err := parseDataFile(filepath.Join(*artifactDir, "data.json"))
 	if err != nil {
 		fmt.Fprintf(stderr, "data: %v\n", err)
 		return 1
@@ -100,11 +106,31 @@ func cmdPublish(args []string, stdout, stderr *os.File) int {
 		fmt.Fprintf(stderr, "coverage: %v\n", err)
 		return 1
 	}
-	// ponytail: publish path (A1 formula resolution, atomic Drive write, webhook
-	// import + staleness handshake) lands with the apps-script move. Skeleton
-	// validates the artifact end-to-end so `data` can wire against it today.
-	fmt.Fprintf(stderr, "publish not yet implemented (validated %d tabs against data)\n", len(m.Tabs))
-	return 3
+
+	cfg, err := loadPublishConfig(*configPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "config: %v\n", err)
+		return 1
+	}
+	if err := publish.Publish(cfg, *artifactDir, *expectedLatest, &http.Client{Timeout: 60 * time.Second}, stderr); err != nil {
+		fmt.Fprintf(stderr, "publish: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "published %d tab(s)\n", len(m.Tabs))
+	return 0
+}
+
+func loadPublishConfig(path string) (publish.Config, error) {
+	var cfg publish.Config
+	f, err := os.Open(path)
+	if err != nil {
+		return cfg, err
+	}
+	defer f.Close()
+	if err := json.NewDecoder(f).Decode(&cfg); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
 }
 
 // Data is the canonical rows artifact (contract/data.schema.json).

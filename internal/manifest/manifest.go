@@ -24,11 +24,15 @@ type Tab struct {
 	Name         string        `json:"name"`
 	DataKey      string        `json:"data_key"`
 	Columns      []Column      `json:"columns"`
-	Freeze       *Freeze       `json:"freeze,omitempty"`
-	HeaderMerges []Merge       `json:"header_merges,omitempty"`
-	SectionRules []SectionRule `json:"section_rules,omitempty"`
-	Gradients    []Gradient    `json:"gradients,omitempty"`
-	Charts       []Chart       `json:"charts,omitempty"`
+	HeaderRow      int            `json:"header_row,omitempty"`
+	Freeze         *Freeze        `json:"freeze,omitempty"`
+	HeaderMerges   []Merge        `json:"header_merges,omitempty"`
+	NumberFormats  []NumberFormat `json:"number_formats,omitempty"`
+	RowLabelStyles []RowLabelStyle `json:"row_label_styles,omitempty"`
+	TextRules      []TextRule     `json:"text_rules,omitempty"`
+	ColumnWidths   []ColumnWidth  `json:"column_widths,omitempty"`
+	Gradients      []Gradient     `json:"gradients,omitempty"`
+	Charts         []Chart        `json:"charts,omitempty"`
 }
 
 type Column struct {
@@ -49,15 +53,40 @@ type Merge struct {
 	Label string `json:"label"`
 }
 
-type SectionRule struct {
+type NumberFormat struct {
+	Column string `json:"column"`
+	Format string `json:"format"`
+}
+
+type RowLabelStyle struct {
 	Match LabelMatch `json:"match"`
-	Style string     `json:"style"`
+	Style RowStyle   `json:"style"`
+}
+
+type RowStyle struct {
+	Bold      bool   `json:"bold,omitempty"`
+	Background string `json:"background,omitempty"`
+	FontColor string `json:"font_color,omitempty"`
+	FontSize  int    `json:"font_size,omitempty"`
+	Merge     bool   `json:"merge,omitempty"`
+	RowHeight int    `json:"row_height,omitempty"`
 }
 
 type LabelMatch struct {
 	Column string `json:"column,omitempty"`
 	Prefix string `json:"prefix,omitempty"`
 	Suffix string `json:"suffix,omitempty"`
+	Equals string `json:"equals,omitempty"`
+}
+
+type TextRule struct {
+	Equals string `json:"equals"`
+	Color  string `json:"color"`
+}
+
+type ColumnWidth struct {
+	Column string `json:"column"`
+	Width  int    `json:"width"`
 }
 
 type Gradient struct {
@@ -66,19 +95,32 @@ type Gradient struct {
 	MinColor string `json:"min_color,omitempty"`
 	MidColor string `json:"mid_color,omitempty"`
 	MaxColor string `json:"max_color,omitempty"`
+	MinValue any    `json:"min_value,omitempty"`
+	MidValue any    `json:"mid_value,omitempty"`
+	MaxValue any    `json:"max_value,omitempty"`
 }
 
 type Chart struct {
-	Type   string   `json:"type"`
-	Title  string   `json:"title,omitempty"`
-	X      string   `json:"x"`
-	Series []string `json:"series"`
+	Type        string   `json:"type"`
+	Title       string   `json:"title,omitempty"`
+	X           string   `json:"x"`
+	Series      []string `json:"series"`
+	NumHeaders  int      `json:"num_headers,omitempty"`
+	VAxisFormat string   `json:"v_axis_format,omitempty"`
+	Colors      []string `json:"colors,omitempty"`
+	Width       int      `json:"width,omitempty"`
+	Height      int      `json:"height,omitempty"`
+	Position    *ChartPos `json:"position,omitempty"`
+}
+
+type ChartPos struct {
+	Row int `json:"row,omitempty"`
+	Col int `json:"col,omitempty"`
 }
 
 var (
 	validColumnTypes  = map[string]bool{"string": true, "number": true, "integer": true, "money": true, "percent": true, "date": true, "hour": true}
-	validSectionStyle = map[string]bool{"section-header": true, "subtotal": true, "muted": true}
-	validGradientKind = map[string]bool{"number": true, "percentile": true}
+	validGradientKind = map[string]bool{"number": true, "percent": true, "percentile": true, "min": true, "max": true}
 )
 
 // Parse decodes and validates a manifest from r.
@@ -163,12 +205,24 @@ func (t *Tab) validate() error {
 			return fmt.Errorf("gradient on %q: invalid kind %q", g.Column, g.Kind)
 		}
 	}
-	for _, sr := range t.SectionRules {
-		if !validSectionStyle[sr.Style] {
-			return fmt.Errorf("section rule: invalid style %q", sr.Style)
+	for _, nf := range t.NumberFormats {
+		if !names[nf.Column] {
+			return fmt.Errorf("number_format references unknown column %q", nf.Column)
 		}
-		if sr.Match.Column != "" && !names[sr.Match.Column] {
-			return fmt.Errorf("section rule references unknown column %q", sr.Match.Column)
+	}
+	for _, cw := range t.ColumnWidths {
+		if !names[cw.Column] {
+			return fmt.Errorf("column_width references unknown column %q", cw.Column)
+		}
+	}
+	for _, rls := range t.RowLabelStyles {
+		if rls.Match.Column != "" && !names[rls.Match.Column] {
+			return fmt.Errorf("row_label_style references unknown column %q", rls.Match.Column)
+		}
+	}
+	for _, hm := range t.HeaderMerges {
+		if !names[hm.From] || !names[hm.To] {
+			return fmt.Errorf("header_merge references unknown column %q/%q", hm.From, hm.To)
 		}
 	}
 	for _, ch := range t.Charts {

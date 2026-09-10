@@ -27,9 +27,13 @@
           "description": "Key into data.json.datasets selecting the rows for this tab."
         },
         "columns": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/column" } },
+        "header_row": { "type": "integer", "minimum": 1, "description": "Number of header rows before data (default 1). Merges/charts anchor to this." },
         "freeze": { "$ref": "#/$defs/freeze" },
         "header_merges": { "type": "array", "items": { "$ref": "#/$defs/merge" } },
-        "section_rules": { "type": "array", "items": { "$ref": "#/$defs/sectionRule" } },
+        "number_formats": { "type": "array", "items": { "$ref": "#/$defs/numberFormat" } },
+        "row_label_styles": { "type": "array", "items": { "$ref": "#/$defs/rowLabelStyle" } },
+        "text_rules": { "type": "array", "items": { "$ref": "#/$defs/textRule" } },
+        "column_widths": { "type": "array", "items": { "$ref": "#/$defs/columnWidth" } },
         "gradients": { "type": "array", "items": { "$ref": "#/$defs/gradient" } },
         "charts": { "type": "array", "items": { "$ref": "#/$defs/chart" } }
       }
@@ -56,19 +60,61 @@
       "additionalProperties": false,
       "properties": { "from": { "type": "string" }, "to": { "type": "string" }, "label": { "type": "string" } }
     },
-    "sectionRule": {
+    "numberFormat": {
+      "type": "object",
+      "required": ["column", "format"],
+      "additionalProperties": false,
+      "properties": {
+        "column": { "type": "string", "description": "Column name; resolved to a 1-based index at render." },
+        "format": { "type": "string", "description": "Sheets number format, e.g. `$0.00`, `0.00%`, `#,##0`, `yyyy-mm-dd`." }
+      }
+    },
+    "rowLabelStyle": {
       "type": "object",
       "required": ["match", "style"],
       "additionalProperties": false,
+      "description": "Content-driven row styling: scan a label column, style matching rows. Survives section shifts (no hard-coded row numbers).",
       "properties": {
         "match": { "$ref": "#/$defs/labelMatch" },
-        "style": { "enum": ["section-header", "subtotal", "muted"] }
+        "style": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bold": { "type": "boolean" },
+            "background": { "type": "string" },
+            "font_color": { "type": "string" },
+            "font_size": { "type": "integer" },
+            "merge": { "type": "boolean" },
+            "row_height": { "type": "integer" }
+          }
+        }
       }
     },
     "labelMatch": {
       "type": "object",
       "additionalProperties": false,
-      "properties": { "column": { "type": "string" }, "prefix": { "type": "string" }, "suffix": { "type": "string" } }
+      "properties": {
+        "column": { "type": "string", "description": "Label column name (default first column)." },
+        "prefix": { "type": "string" },
+        "suffix": { "type": "string" },
+        "equals": { "type": "string" }
+      }
+    },
+    "textRule": {
+      "type": "object",
+      "required": ["equals", "color"],
+      "additionalProperties": false,
+      "description": "Whole-range text-equals background rule, e.g. PASS→green. Domain-agnostic; the strings come from the manifest.",
+      "properties": {
+        "equals": { "type": "string" },
+        "color": { "type": "string" }
+      }
+    },
+    "columnWidth": {
+      "type": "object",
+      "required": ["column", "width"],
+      "additionalProperties": false,
+      "properties": { "column": { "type": "string" }, "width": { "type": "integer", "minimum": 1 } }
     },
     "gradient": {
       "type": "object",
@@ -76,10 +122,13 @@
       "additionalProperties": false,
       "properties": {
         "column": { "type": "string" },
-        "kind": { "enum": ["number", "percentile"] },
+        "kind": { "enum": ["number", "percent", "percentile", "min", "max"] },
         "min_color": { "type": "string" },
         "mid_color": { "type": "string" },
-        "max_color": { "type": "string" }
+        "max_color": { "type": "string" },
+        "min_value": { "type": ["number", "string"] },
+        "mid_value": { "type": ["number", "string"] },
+        "max_value": { "type": ["number", "string"] }
       }
     },
     "chart": {
@@ -90,7 +139,17 @@
         "type": { "const": "line" },
         "title": { "type": "string" },
         "x": { "type": "string", "description": "Column name for the X axis." },
-        "series": { "type": "array", "minItems": 1, "items": { "type": "string" }, "description": "Column names plotted as series." }
+        "series": { "type": "array", "minItems": 1, "items": { "type": "string" }, "description": "Column names plotted as series." },
+        "num_headers": { "type": "integer", "minimum": 0 },
+        "v_axis_format": { "type": "string" },
+        "colors": { "type": "array", "items": { "type": "string" } },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" },
+        "position": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "row": { "type": "integer" }, "col": { "type": "integer" } }
+        }
       }
     }
   }
