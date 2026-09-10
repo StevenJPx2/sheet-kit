@@ -47,7 +47,8 @@
         "header": { "type": "string", "description": "Optional display header shown in the sheet; defaults to `name`. Use when several columns share a display label (e.g. repeated 'Lift % vs C20' across metric groups) but need unique names for formula refs." },
         "type": { "enum": ["string", "number", "integer", "money", "percent", "date", "hour"] },
         "source_field": { "type": "string", "description": "Field on the data row to pull the value from. Mutually exclusive with `formula`." },
-        "formula": { "type": "string", "description": "Name-based formula, e.g. `={Revenue}/{Sessions}`. sheet-kit resolves {Name} to A1 refs per row." }
+        "formula": { "type": "string", "description": "Name-based formula, e.g. `={Revenue}/{Sessions}`. sheet-kit resolves {Name} to A1 refs per row." },
+        "bold": { "type": "boolean", "description": "Bold this column's data cells." }
       }
     },
     "freeze": {

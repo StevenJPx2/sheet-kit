@@ -123,9 +123,11 @@ function skTextRules_(sheet, rules, range) {
  * rowLabelStyles: [{match:{column,prefix,suffix,equals}, style:{bold,background,fontColor,fontSize,merge,rowHeight}}]
  * Applied by scanning a label column — survives section shifts (no hard-coded rows).
  */
-function skRowLabelStyles_(sheet, values, width, rules) {
+function skRowLabelStyles_(sheet, values, width, rules, columns) {
   (rules || []).forEach(function (rule) {
-    var col = (rule.match && rule.match.column) || 1;
+    var name = rule.match && rule.match.column;
+    var col = name ? columnIndex_(columns || [], name) : 1;
+    if (col <= 0) col = 1;
     for (var i = 0; i < values.length; i++) {
       var label = String(values[i][col - 1] || '');
       if (!matchLabel_(label, rule.match)) continue;
@@ -201,10 +203,19 @@ function renderTab(spreadsheet, spec, values) {
   var width = written.width;
   var columns = spec.columns || [];
 
-  // Header rows are bold + centered by default (universal sheet convention).
+  // Header rows are bold + left-aligned by default.
   var headerRowCount = spec.header_row || 1;
   if (written.rows > 0) {
-    sheet.getRange(1, 1, headerRowCount, width).setFontWeight('bold').setHorizontalAlignment('center');
+    sheet.getRange(1, 1, headerRowCount, width).setFontWeight('bold').setHorizontalAlignment('left');
+  }
+
+  // Column-level bold: a column with `bold:true` bolds its data cells.
+  var dataFirst = headerRowCount + 1;
+  var dataCount = Math.max(0, written.rows - headerRowCount);
+  if (dataCount > 0) {
+    columns.forEach(function (c, ci) {
+      if (c.bold) sheet.getRange(dataFirst, ci + 1, dataCount, 1).setFontWeight('bold');
+    });
   }
 
   // header merges span the GROUP-header row (row 1) — the top of a 2-row header
@@ -243,7 +254,7 @@ function renderTab(spreadsheet, spec, values) {
     sheet.setConditionalFormatRules(skTextRules_(sheet, spec.text_rules, sheet.getRange(1, 1, written.rows, width)));
   }
 
-  if (spec.row_label_styles) skRowLabelStyles_(sheet, normalizeWidth_(values), width, spec.row_label_styles);
+  if (spec.row_label_styles) skRowLabelStyles_(sheet, normalizeWidth_(values), width, spec.row_label_styles, columns);
 
   skFreeze_(sheet, spec.freeze);
 

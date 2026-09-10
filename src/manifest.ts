@@ -13,6 +13,7 @@ export interface Column {
   type: ColumnType;
   source_field?: string;
   formula?: string;
+  bold?: boolean;
 }
 
 export interface Freeze { rows?: number; cols?: number; }
