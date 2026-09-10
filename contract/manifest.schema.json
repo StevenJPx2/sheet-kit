@@ -43,7 +43,8 @@
       "required": ["name", "type"],
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string", "minLength": 1, "description": "Stable column name; A1 letters are resolved by sheet-kit at render time (kills off-by-one bugs)." },
+        "name": { "type": "string", "minLength": 1, "description": "Stable UNIQUE column id; formulas reference it as {name} and sheet-kit resolves A1 at render (kills off-by-one bugs)." },
+        "header": { "type": "string", "description": "Optional display header shown in the sheet; defaults to `name`. Use when several columns share a display label (e.g. repeated 'Lift % vs C20' across metric groups) but need unique names for formula refs." },
         "type": { "enum": ["string", "number", "integer", "money", "percent", "date", "hour"] },
         "source_field": { "type": "string", "description": "Field on the data row to pull the value from. Mutually exclusive with `formula`." },
         "formula": { "type": "string", "description": "Name-based formula, e.g. `={Revenue}/{Sessions}`. sheet-kit resolves {Name} to A1 refs per row." }

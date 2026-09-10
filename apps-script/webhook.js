@@ -68,9 +68,9 @@ function rowsToValues_(spec, rows) {
     });
     grid.push(groupRow);
   }
+  // Column-name header row (display header, or the unique name when unset).
+  grid.push(columns.map(function (c) { return c.header != null ? c.header : c.name; }));
 
-  // Column-name header row.
-  grid.push(columns.map(function (c) { return c.name; }));
 
   // Data rows: source_field value, or a per-row resolved formula.
   rows.forEach(function (row, i) {

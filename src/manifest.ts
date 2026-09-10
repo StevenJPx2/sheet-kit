@@ -9,6 +9,7 @@ export type GradientKind = "number" | "percent" | "percentile" | "min" | "max";
 
 export interface Column {
   name: string;
+  header?: string;
   type: ColumnType;
   source_field?: string;
   formula?: string;
@@ -111,8 +112,8 @@ function validateTab(t: Tab): string {
     if (names.has(c.name)) return `duplicate column name ${JSON.stringify(c.name)}`;
     names.add(c.name);
     if (!COLUMN_TYPES.has(c.type)) return `column ${JSON.stringify(c.name)}: invalid type ${JSON.stringify(c.type)}`;
-    if ((!c.source_field) === (!c.formula)) {
-      return `column ${JSON.stringify(c.name)}: exactly one of source_field or formula is required`;
+    if (c.source_field && c.formula) {
+      return `column ${JSON.stringify(c.name)}: source_field and formula are mutually exclusive`;
     }
   }
 
