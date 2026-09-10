@@ -201,12 +201,13 @@ function renderTab(spreadsheet, spec, values) {
   var width = written.width;
   var columns = spec.columns || [];
 
-  // header merges: spec.header_merges use column names → resolve to indices.
+  // header merges span the GROUP-header row (row 1) — the top of a 2-row header
+  // holds the group labels (RPV/AOV/…); the column-name row sits below it.
   if (spec.header_merges) {
     var merges = spec.header_merges.map(function (m) {
       return { from: columnIndex_(columns, m.from), to: columnIndex_(columns, m.to), label: m.label };
     }).filter(function (m) { return m.from > 0 && m.to > 0; });
-    skMergeHeader_(sheet, spec.header_row || 1, merges);
+    skMergeHeader_(sheet, 1, merges);
   }
 
   // firstRow/rowCount for value styling: rows after the header block.
