@@ -14,6 +14,7 @@ export interface Column {
   source_field?: string;
   formula?: string;
   bold?: boolean;
+  preserve?: boolean;
 }
 
 export interface Freeze { rows?: number; cols?: number; }
@@ -22,7 +23,7 @@ export interface NumberFormat { column: string; format: string; }
 export interface ColumnWidth { column: string; width: number; }
 export interface TextRule { equals: string; color: string; }
 
-export interface LabelMatch { column?: string; prefix?: string; suffix?: string; equals?: string; }
+export interface LabelMatch { column?: string; prefix?: string; suffix?: string; equals?: string; empty?: boolean; }
 export interface RowStyle { bold?: boolean; background?: string; font_color?: string; font_size?: number; merge?: boolean; row_height?: number; }
 export interface RowLabelStyle { match: LabelMatch; style: RowStyle; }
 
@@ -50,6 +51,7 @@ export interface Tab {
   name: string;
   data_key: string;
   columns: Column[];
+  row_key?: string;
   header_row?: number;
   freeze?: Freeze;
   header_merges?: Merge[];
@@ -123,6 +125,8 @@ function validateTab(t: Tab): string {
       if (!names.has(ref)) return `column ${JSON.stringify(c.name)} formula references unknown column ${JSON.stringify(ref)}`;
     }
   }
+  if (t.row_key && !names.has(t.row_key)) return `row_key references unknown column ${JSON.stringify(t.row_key)}`;
+  if (t.columns.some((column) => column.preserve) && !t.row_key) return "preserved columns require row_key";
   for (const g of t.gradients ?? []) {
     if (!names.has(g.column)) return `gradient references unknown column ${JSON.stringify(g.column)}`;
     if (!GRADIENT_KINDS.has(g.kind)) return `gradient on ${JSON.stringify(g.column)}: invalid kind ${JSON.stringify(g.kind)}`;

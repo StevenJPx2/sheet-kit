@@ -54,3 +54,15 @@ test("unknown chart series rejected", () => {
   m.tabs[0].charts![0].series = ["Nope"];
   assert.notEqual(validate(m), "");
 });
+
+test("preserved columns require a valid row key", () => {
+  const m = base();
+  m.tabs[0].columns.push({ name: "Notes", type: "string", preserve: true });
+  assert.equal(validate(m), "tab \"Daily\": preserved columns require row_key");
+
+  m.tabs[0].row_key = "Missing";
+  assert.equal(validate(m), "tab \"Daily\": row_key references unknown column \"Missing\"");
+
+  m.tabs[0].row_key = "Date";
+  assert.equal(validate(m), "");
+});

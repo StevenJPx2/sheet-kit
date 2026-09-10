@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { columnName_, columnIndex_, normalizeWidth_, matchLabel_ } = require('./sheetkit.js');
+const { columnName_, columnIndex_, normalizeWidth_, matchLabel_, preserveValues_, rowKeyValue_ } = require('./sheetkit.js');
 
 // A1 resolver — the off-by-one killer.
 assert.equal(columnName_(1), 'A');
@@ -23,5 +23,36 @@ assert.ok(matchLabel_('T60 cumulative', { suffix: 'cumulative' }));
 assert.ok(matchLabel_('Rank', { equals: 'Rank' }));
 assert.ok(!matchLabel_('anything', {}));
 assert.ok(!matchLabel_('Rank', { equals: 'Rankk' }));
+assert.ok(matchLabel_('', { empty: true }));
+assert.ok(!matchLabel_('July cumulative', { empty: true }));
+
+// User-entered columns survive row movement and newly inserted section rows.
+const preserveSpec = {
+  header_row: 1,
+  row_key: 'Date',
+  columns: [
+    { name: 'Date' },
+    { name: 'Value' },
+    { name: 'Notes', preserve: true },
+  ],
+};
+const oldValues = [
+  ['Date', 'Value', 'Notes'],
+  ['2026-09-08', 1, 'deployed'],
+  ['2026-09-09', 2, 'campaign'],
+];
+const newValues = [
+  ['Date', 'Value', 'Notes'],
+  ['September cumulative', 3, ''],
+  ['2026-09-09', 4, ''],
+  ['2026-09-08', 5, ''],
+];
+assert.deepEqual(preserveValues_(preserveSpec, oldValues, newValues), [
+  ['Date', 'Value', 'Notes'],
+  ['September cumulative', 3, ''],
+  ['2026-09-09', 4, 'campaign'],
+  ['2026-09-08', 5, 'deployed'],
+]);
+assert.equal(rowKeyValue_(new Date(2026, 8, 1)), '2026-09-01');
 
 console.log('sheetkit primitive checks passed.');
