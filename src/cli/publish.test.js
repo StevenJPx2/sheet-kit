@@ -40,9 +40,7 @@ test("publish stages dataset-specific files", async () => {
   try {
     const error = await publish({ url: "https://example.com", secret: "x", driveDir: drive }, artifact, "", () => {});
     assert.equal(error, "");
-    assert.ok(existsSync(join(drive, "manifest.hourly-performance.json")));
     assert.ok(existsSync(join(drive, "data.hourly-performance.json")));
-    assert.equal(payload.manifest, "manifest.hourly-performance.json");
     assert.equal(payload.data, "data.hourly-performance.json");
   } finally {
     globalThis.fetch = previousFetch;

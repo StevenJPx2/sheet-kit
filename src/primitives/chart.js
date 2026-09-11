@@ -13,6 +13,7 @@ export default definePrimitive({
     for (const c of charts ?? []) {
       if (c.type !== "line") return `chart: unsupported type ${JSON.stringify(c.type)}`;
       if (!columns.has(c.x)) return `chart references unknown x column ${JSON.stringify(c.x)}`;
+      if (!Array.isArray(c.series) || c.series.length === 0) return "chart requires at least one series column";
       for (const s of c.series ?? []) {
         if (!columns.has(s)) return `chart references unknown series column ${JSON.stringify(s)}`;
       }

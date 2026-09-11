@@ -20,10 +20,12 @@ function doPost(event) {
       return jsonResponse_({ ok: false, error: 'unauthorized' });
     }
 
-    var manifest = compiledManifest_() || readJsonByName_(String(payload.manifest || 'manifest.json'));
+    var manifest = compiledManifest_();
+    if (!manifest) throw new Error('compiled manifest missing');
 
     if (payload.action === 'inspect') {
-      return jsonResponse_({ ok: true, spreadsheet: inspectSpreadsheet_(manifest.spreadsheet_id, payload) });
+      var inspectId = String(payload.spreadsheetId || manifest.spreadsheet_id);
+      return jsonResponse_({ ok: true, spreadsheet: inspectSpreadsheet_(inspectId, payload) });
     }
 
     var data = readJsonByName_(String(payload.data || 'data.json'));
@@ -77,7 +79,12 @@ function inspectSpreadsheet_(spreadsheetId, payload) {
       columns: sheet.getLastColumn(),
       frozen_rows: sheet.getFrozenRows(),
       frozen_columns: sheet.getFrozenColumns(),
-      merges: sheet.getDataRange().getMergedRanges().map(function (range) { return range.getA1Notation(); })
+      merges: sheet.getDataRange().getMergedRanges().map(function (range) { return range.getA1Notation(); }),
+      conditional_formats: sheet.getConditionalFormatRules().map(function (rule) {
+        var ranges = rule.getRanges().map(function (r) { return r.getA1Notation(); });
+        var gradient = rule.getGradientCondition();
+        return { ranges: ranges, type: gradient ? 'gradient' : 'boolean' };
+      })
     };
     if (!includeCells) return result;
 

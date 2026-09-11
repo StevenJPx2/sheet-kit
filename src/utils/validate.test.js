@@ -62,6 +62,22 @@ test("chart primitive owns its schema (unknown series rejected)", () => {
   assert.notEqual(validate(m), "");
 });
 
+test("chart requires a series", () => {
+  const m = base();
+  m.tabs[0].charts[0].series = [];
+  assert.notEqual(validate(m), "");
+});
+
+test("duplicate tab names and data keys are rejected", () => {
+  const named = base();
+  named.tabs.push({ ...named.tabs[0], data_key: "other" });
+  assert.match(validate(named), /duplicate tab name/);
+
+  const keyed = base();
+  keyed.tabs.push({ ...keyed.tabs[0], name: "Other" });
+  assert.match(validate(keyed), /duplicate data_key/);
+});
+
 test("preserved columns require a valid row key", () => {
   const m = base();
   m.tabs[0].columns.push({ name: "Notes", type: "string", preserve: true });

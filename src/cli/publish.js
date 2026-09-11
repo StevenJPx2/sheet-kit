@@ -1,7 +1,12 @@
 // Stage the artifact to the mounted Google Drive folder and trigger the generic
 // Apps Script webhook to render it. Domain-agnostic: move files + POST a token.
 import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+
+// Expand a leading ~/ to the user's home dir (path.join won't, and driveDir is
+// authored with ~ in merchant configs).
+const expandHome = (p) => (p.startsWith("~/") ? join(homedir(), p.slice(2)) : p);
 
 /**
  * @typedef {Object} PublishConfig
@@ -35,9 +40,8 @@ export async function requestWebhook(cfg, payload) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Copy manifest.json + data.json into the mounted Drive folder under
- * dataset-specific names, POST the
- * webhook, and run the Drive-sync staleness retry loop until the importer
+ * Copy one uniquely named data file into the mounted Drive folder, POST the
+ * filename, and run the Drive-sync staleness retry loop until the importer
  * confirms it rendered the just-written data. Returns an error message or "".
  * @param {PublishConfig} cfg
  * @param {string} artifactDir
@@ -65,21 +69,21 @@ export async function publish(cfg, artifactDir, expectedLatest, log) {
     return `read data.json: ${String(e)}`;
   }
 
-  const manifestName = `manifest.${datasetKey}.json`;
   const dataName = `data.${datasetKey}.json`;
-  for (const [source, name] of [["manifest.json", manifestName], ["data.json", dataName]]) {
-    const dst = join(cfg.driveDir, name);
+  const destination = join(expandHome(cfg.driveDir), dataName);
+  mkdirSync(dirname(destination), { recursive: true });
+  for (let attempt = 0; attempt < 6; attempt++) {
     try {
-      mkdirSync(dirname(dst), { recursive: true });
-      copyFileSync(join(artifactDir, source), dst);
-    } catch (e) {
-      return `stage ${source} to Drive: ${String(e)}`;
+      copyFileSync(join(artifactDir, "data.json"), destination);
+      break;
+    } catch (error) {
+      if (attempt === 5) return `stage data.json to Drive: ${String(error)}`;
+      await sleep(1000);
     }
   }
 
   const body = JSON.stringify({
     token: cfg.secret.trim(),
-    manifest: manifestName,
     data: dataName,
     expectedLatest,
   });

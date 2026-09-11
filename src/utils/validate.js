@@ -40,7 +40,14 @@ export function validate(m) {
   if (!m.spreadsheet_id) return "spreadsheet_id is required";
   if (!m.tabs || m.tabs.length === 0) return "manifest has no tabs";
 
+  const tabNames = new Set();
+  const dataKeys = new Set();
   for (const tab of m.tabs) {
+    if (tabNames.has(tab.name)) return `duplicate tab name ${JSON.stringify(tab.name)}`;
+    if (dataKeys.has(tab.data_key)) return `duplicate data_key ${JSON.stringify(tab.data_key)}`;
+    tabNames.add(tab.name);
+    dataKeys.add(tab.data_key);
+
     const err = validateTab(tab);
     if (err) return `tab ${JSON.stringify(tab.name)}: ${err}`;
   }
@@ -50,7 +57,7 @@ export function validate(m) {
 /** @param {import("../types.js").Tab} t */
 function validateTab(t) {
   if (!t.name) return "name is required";
-  if (!t.data_key) return "data_key is required";
+  if (!t.data_key || !t.data_key.trim()) return "data_key is required";
   if (!t.columns || t.columns.length === 0) return "has no columns";
 
   const names = new Set();

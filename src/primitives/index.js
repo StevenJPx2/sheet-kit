@@ -24,3 +24,14 @@ export const PRIMITIVES = [
   columnWidth,
   chart,
 ];
+
+const names = new Set();
+const fields = new Set();
+for (const primitive of PRIMITIVES) {
+  if (names.has(primitive.name)) throw new Error(`duplicate primitive name ${primitive.name}`);
+  names.add(primitive.name);
+  if (primitive.field != null) {
+    if (fields.has(primitive.field)) throw new Error(`duplicate primitive field ${primitive.field}`);
+    fields.add(primitive.field);
+  }
+}
