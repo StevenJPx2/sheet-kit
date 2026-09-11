@@ -53,7 +53,7 @@ test("resolveFormula_ resolves {Name} to A1 for a row (IFERROR pattern)", () => 
   assert.equal(sandbox.resolveFormula_("={Missing}", columns, 3), "=#REF!");
 });
 
-test("rowsToValues_ builds a 2-row grouped header + formula rows", () => {
+test("buildGrid_ builds a 2-row grouped header + formula rows", () => {
   const spec = {
     header_row: 2,
     header_merges: [{ from: "C Rev", to: "C Sess", label: "Group" }],
@@ -63,7 +63,7 @@ test("rowsToValues_ builds a 2-row grouped header + formula rows", () => {
       { name: "RPV", header: "RPV", formula: "={C Rev}/{C Sess}" },
     ],
   };
-  const grid = sandbox.rowsToValues_(spec, [{ rev: 10, sess: 5 }]);
+  const grid = sandbox.buildGrid_(spec, [{ rev: 10, sess: 5 }]).values;
   assert.equal(grid.length, 3); // group header + column header + 1 data row
   assert.equal(grid[0][0], "Group");
   assert.equal(JSON.stringify(grid[1]), JSON.stringify(["Rev", "Sess", "RPV"]));

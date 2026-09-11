@@ -15,6 +15,9 @@ export default definePrimitive({
     for (const g of gradients ?? []) {
       if (!columns.has(g.column)) return `gradient references unknown column ${JSON.stringify(g.column)}`;
       if (!GRADIENT_KINDS.has(g.kind)) return `gradient on ${JSON.stringify(g.column)}: invalid kind ${JSON.stringify(g.kind)}`;
+      for (const k of ["min_kind", "mid_kind", "max_kind"]) {
+        if (g[k] != null && !GRADIENT_KINDS.has(g[k])) return `gradient on ${JSON.stringify(g.column)}: invalid ${k} ${JSON.stringify(g[k])}`;
+      }
       if (g.group_by != null && !columns.has(g.group_by)) return `gradient on ${JSON.stringify(g.column)}: unknown group_by column ${JSON.stringify(g.group_by)}`;
     }
     return "";

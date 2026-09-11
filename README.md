@@ -24,10 +24,12 @@ src/
   primitives/index.js the registry the compiler + validator walk
   runtime/core.js     A1 helpers, formula resolution, preservation, renderTab dispatch
   runtime/webhook.js  generic doPost transport + inspect
-  utils/              definePrimitive builder
+  utils/              definePrimitive builder, compiler, validator, data coverage:
+                        define-primitive.js  the typed primitive builder
+                        compiler.js          assembles core + used primitives + dispatch → *.gs
+                        validate.js          core structural checks; delegates field rules to primitives
+                        data.js              dataset/coverage checks
   cli/                command layer (cli, publish, deploy)
-  compiler.js         assembles core + used primitives + generated dispatch → *.gs
-  validate.js         core structural checks; delegates field rules to each primitive
   types.d.ts          shared shapes + ambient runtime globals (types only)
 ```
 

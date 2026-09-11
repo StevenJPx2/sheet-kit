@@ -96,7 +96,6 @@ declare global {
   ): Array<{ firstRow: number; rowCount: number }>;
   function matchLabel_(label: string, match: any): boolean;
   function resolveFormula_(formula: string, columns: any[], sheetRow: number): string;
-  function rowsToValues_(spec: any, rows: any[]): any[][];
 
   var SK_RENDER_STEPS: Array<(ctx: any) => void>;
   var SHEETKIT_MANIFEST: any;

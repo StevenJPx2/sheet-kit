@@ -120,11 +120,6 @@ function buildGrid_(spec, rows) {
   return { values: grid, sections: sections, headers: headers };
 }
 
-/** rowsToValues_ is the grid-only view of buildGrid_ (kept for callers/tests). */
-function rowsToValues_(spec, rows) {
-  return buildGrid_(spec, rows).values;
-}
-
 function rowKeyValue_(value) {
   if (value instanceof Date && !isNaN(value.getTime())) {
     var month = String(value.getMonth() + 1).padStart(2, '0');
