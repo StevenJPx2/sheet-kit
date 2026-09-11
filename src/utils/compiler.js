@@ -7,14 +7,14 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validate } from "./validate.js";
-import { PRIMITIVES } from "./primitives/index.js";
+import { PRIMITIVES } from "../primitives/index.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const runtimeDir = join(here, "runtime");
+const runtimeDir = join(here, "..", "runtime");
 
 /**
  * @param {string} artifactsDir
- * @returns {import("./types.js").Manifest[]}
+ * @returns {import("../types.js").Manifest[]}
  */
 function manifestsIn(artifactsDir) {
   const paths = readdirSync(artifactsDir, { withFileTypes: true })
@@ -24,7 +24,7 @@ function manifestsIn(artifactsDir) {
   return paths.map((path) => JSON.parse(readFileSync(path, "utf8")));
 }
 
-/** @param {import("./types.js").Manifest[]} manifests */
+/** @param {import("../types.js").Manifest[]} manifests */
 function combine(manifests) {
   const spreadsheetId = manifests[0]?.spreadsheet_id;
   if (!spreadsheetId) throw new Error("no manifests found");

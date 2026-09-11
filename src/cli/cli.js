@@ -9,10 +9,10 @@
 //   sheet-kit version
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { compileAppsScript } from "../compiler.js";
+import { compileAppsScript } from "../utils/compiler.js";
 import { deployAppsScript } from "./deploy.js";
-import { CONTRACT_VERSION, validate } from "../validate.js";
-import { checkCoverage, validateData } from "../data.js";
+import { CONTRACT_VERSION, validate } from "../utils/validate.js";
+import { checkCoverage, validateData } from "../utils/data.js";
 import { loadPublishConfig, publish, requestWebhook } from "./publish.js";
 
 /**

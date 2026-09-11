@@ -2,7 +2,7 @@
 import { CONTRACT_VERSION } from "./validate.js";
 
 /**
- * @param {import("./types.js").Data} d
+ * @param {import("../types.js").Data} d
  * @returns {string}
  */
 export function validateData(d) {
@@ -15,8 +15,8 @@ export function validateData(d) {
 
 /**
  * Every manifest tab must have a matching dataset.
- * @param {import("./types.js").Manifest} m
- * @param {import("./types.js").Data} d
+ * @param {import("../types.js").Manifest} m
+ * @param {import("../types.js").Data} d
  * @returns {string}
  */
 export function checkCoverage(m, d) {

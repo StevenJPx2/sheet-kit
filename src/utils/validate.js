@@ -2,7 +2,7 @@
 // rule is owned by the primitive that renders that field and reached through the
 // PRIMITIVES registry — there is no central schema to keep in sync.
 
-import { PRIMITIVES } from "./primitives/index.js";
+import { PRIMITIVES } from "../primitives/index.js";
 
 export const CONTRACT_VERSION = 1;
 
@@ -30,7 +30,7 @@ export function formulaRefs(formula) {
 
 /**
  * Validate a parsed manifest; returns an error message or "" when valid.
- * @param {import("./types.js").Manifest} m
+ * @param {import("../types.js").Manifest} m
  * @returns {string}
  */
 export function validate(m) {
@@ -47,7 +47,7 @@ export function validate(m) {
   return "";
 }
 
-/** @param {import("./types.js").Tab} t */
+/** @param {import("../types.js").Tab} t */
 function validateTab(t) {
   if (!t.name) return "name is required";
   if (!t.data_key) return "data_key is required";

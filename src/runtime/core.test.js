@@ -11,7 +11,7 @@ import vm from "node:vm";
 const here = dirname(fileURLToPath(import.meta.url));
 const sandbox = {};
 vm.createContext(sandbox);
-vm.runInContext(readFileSync(join(here, "runtime/core.js"), "utf8"), sandbox);
+vm.runInContext(readFileSync(join(here, "core.js"), "utf8"), sandbox);
 
 test("columnName_ produces A1 letters", () => {
   assert.equal(sandbox.columnName_(1), "A");
