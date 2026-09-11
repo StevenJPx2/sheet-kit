@@ -3,12 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "bin": { "sheet-kit": "./src/cli.ts" },
+  "bin": { "sheet-kit": "./src/cli/cli.js" },
   "engines": { "node": ">=24" },
   "scripts": {
-    "test": "node --test src/*.test.ts",
-    "check": "tsc --noEmit",
-    "build": "scriptc build src/cli.ts -o dist/sheet-kit"
+    "test": "node --test",
+    "check": "tsc -p jsconfig.json"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

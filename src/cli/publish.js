@@ -1,26 +1,22 @@
 // Stage the artifact to the mounted Google Drive folder and trigger the generic
 // Apps Script webhook to render it. Domain-agnostic: move files + POST a token.
-// Ported from the Go internal/publish. node:fs + fetch → statically compilable.
 import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-export interface PublishConfig {
-  url: string;
-  secret: string;
-  driveDir: string;
-}
+/**
+ * @typedef {Object} PublishConfig
+ * @property {string} url
+ * @property {string} secret
+ * @property {string} driveDir
+ */
 
-interface WebhookResult {
-  ok?: boolean;
-  stale?: boolean;
-  latest?: string;
-  error?: string;
-}
-
-export async function requestWebhook(
-  cfg: PublishConfig,
-  payload: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
+/**
+ * POST a payload to the webhook (token injected) and return its JSON result.
+ * @param {PublishConfig} cfg
+ * @param {Record<string, unknown>} payload
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export async function requestWebhook(cfg, payload) {
   const endpoint = new URL(cfg.url);
   if (endpoint.protocol !== "https:" || !endpoint.host || !cfg.secret.trim()) throw new Error("invalid webhook config");
 
@@ -31,25 +27,25 @@ export async function requestWebhook(
   });
   if (!response.ok) throw new Error(`webhook HTTP ${response.status}`);
 
-  const result = await response.json() as Record<string, unknown>;
+  const result = /** @type {Record<string, unknown>} */ (await response.json());
   if (!result.ok) throw new Error(String(result.error ?? "webhook rejected request"));
   return result;
 }
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Publish copies manifest.json + data.json into the mounted Drive folder, POSTs
- * the webhook, and runs the Drive-sync staleness retry loop until the importer
+ * Copy manifest.json + data.json into the mounted Drive folder, POST the
+ * webhook, and run the Drive-sync staleness retry loop until the importer
  * confirms it rendered the just-written data. Returns an error message or "".
+ * @param {PublishConfig} cfg
+ * @param {string} artifactDir
+ * @param {string} expectedLatest
+ * @param {(msg: string) => void} log
+ * @returns {Promise<string>}
  */
-export async function publish(
-  cfg: PublishConfig,
-  artifactDir: string,
-  expectedLatest: string,
-  log: (msg: string) => void,
-): Promise<string> {
-  let endpoint: URL;
+export async function publish(cfg, artifactDir, expectedLatest, log) {
+  let endpoint;
   try {
     endpoint = new URL(cfg.url);
   } catch {
@@ -78,15 +74,11 @@ export async function publish(
   const deadline = Date.now() + 5 * 60_000;
   let transientRetries = 0;
   for (;;) {
-    let result: WebhookResult;
+    let result;
     try {
-      const resp = await fetch(cfg.url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body,
-      });
+      const resp = await fetch(cfg.url, { method: "POST", headers: { "content-type": "application/json" }, body });
       if (!resp.ok) return `webhook HTTP ${resp.status}`;
-      result = (await resp.json()) as WebhookResult;
+      result = await resp.json();
     } catch (e) {
       return `webhook request: ${String(e)}`;
     }
@@ -108,6 +100,10 @@ export async function publish(
   }
 }
 
-export function loadPublishConfig(path: string): PublishConfig {
-  return JSON.parse(readFileSync(path, "utf8")) as PublishConfig;
+/**
+ * @param {string} path
+ * @returns {PublishConfig}
+ */
+export function loadPublishConfig(path) {
+  return JSON.parse(readFileSync(path, "utf8"));
 }

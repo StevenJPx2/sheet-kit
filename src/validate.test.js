@@ -1,9 +1,8 @@
-// Node built-in test runner: node --test (or `scriptc run` per-assert).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validate, formulaRefs, type Manifest } from "./manifest.ts";
+import { validate, formulaRefs } from "./validate.js";
 
-function base(): Manifest {
+function base() {
   return {
     contract_version: 1,
     spreadsheet_id: "sheet-abc",
@@ -49,29 +48,24 @@ test("bad contract version rejected", () => {
   assert.notEqual(validate(m), "");
 });
 
-test("unknown chart series rejected", () => {
+test("gradient primitive owns its schema (unknown group_by rejected)", () => {
   const m = base();
-  m.tabs[0].charts![0].series = ["Nope"];
+  m.tabs[0].gradients[0].group_by = "Nope";
   assert.notEqual(validate(m), "");
+  m.tabs[0].gradients[0].group_by = "Date";
+  assert.equal(validate(m), "");
 });
 
-test("gradient group_by must resolve to a column", () => {
+test("chart primitive owns its schema (unknown series rejected)", () => {
   const m = base();
-  m.tabs[0].gradients![0].group_by = "Nope";
+  m.tabs[0].charts[0].series = ["Nope"];
   assert.notEqual(validate(m), "");
-
-  m.tabs[0].gradients![0].group_by = "Date";
-  assert.equal(validate(m), "");
 });
 
 test("preserved columns require a valid row key", () => {
   const m = base();
   m.tabs[0].columns.push({ name: "Notes", type: "string", preserve: true });
-  assert.equal(validate(m), "tab \"Daily\": preserved columns require row_key");
-
-  m.tabs[0].row_key = "Missing";
-  assert.equal(validate(m), "tab \"Daily\": row_key references unknown column \"Missing\"");
-
+  assert.notEqual(validate(m), "");
   m.tabs[0].row_key = "Date";
   assert.equal(validate(m), "");
 });

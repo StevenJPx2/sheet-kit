@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// sheet-kit CLI — domain-agnostic manifest validation + publish.
+// sheet-kit CLI — the command layer over the compiler/validator/publisher.
 //
 //   sheet-kit validate --manifest manifest.json [--data data.json]
 //   sheet-kit compile  --artifacts DIR --out DIR [--timezone TZ]
@@ -9,15 +9,20 @@
 //   sheet-kit version
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { compileAppsScript } from "./compile.ts";
-import { deployAppsScript } from "./deploy.ts";
-import { CONTRACT_VERSION, validate, type Manifest } from "./manifest.ts";
-import { checkCoverage, validateData, type Data } from "./data.ts";
-import { loadPublishConfig, publish, requestWebhook } from "./publish.ts";
+import { compileAppsScript } from "../compiler.js";
+import { deployAppsScript } from "./deploy.js";
+import { CONTRACT_VERSION, validate } from "../validate.js";
+import { checkCoverage, validateData } from "../data.js";
+import { loadPublishConfig, publish, requestWebhook } from "./publish.js";
 
-/** Minimal --flag value parser (order-independent). */
-function flags(args: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
+/**
+ * Minimal --flag value parser (order-independent).
+ * @param {string[]} args
+ * @returns {Record<string, string>}
+ */
+function flags(args) {
+  /** @type {Record<string, string>} */
+  const out = {};
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a.startsWith("--")) {
@@ -30,22 +35,23 @@ function flags(args: string[]): Record<string, string> {
   return out;
 }
 
-function readJson<T>(path: string): T {
-  return JSON.parse(readFileSync(path, "utf8")) as T;
+function readJson(path) {
+  return JSON.parse(readFileSync(path, "utf8"));
 }
 
-function cmdValidate(args: string[]): number {
+/** @param {string[]} args */
+function cmdValidate(args) {
   const f = flags(args);
   if (!f.manifest) { process.stderr.write("--manifest is required\n"); return 2; }
 
-  let m: Manifest;
-  try { m = readJson<Manifest>(f.manifest); } catch (e) { process.stderr.write(`manifest: ${String(e)}\n`); return 1; }
+  let m;
+  try { m = readJson(f.manifest); } catch (e) { process.stderr.write(`manifest: ${String(e)}\n`); return 1; }
   const mErr = validate(m);
   if (mErr) { process.stderr.write(`manifest: ${mErr}\n`); return 1; }
 
   if (f.data) {
-    let d: Data;
-    try { d = readJson<Data>(f.data); } catch (e) { process.stderr.write(`data: ${String(e)}\n`); return 1; }
+    let d;
+    try { d = readJson(f.data); } catch (e) { process.stderr.write(`data: ${String(e)}\n`); return 1; }
     const dErr = validateData(d);
     if (dErr) { process.stderr.write(`data: ${dErr}\n`); return 1; }
     const cErr = checkCoverage(m, d);
@@ -56,13 +62,14 @@ function cmdValidate(args: string[]): number {
   return 0;
 }
 
-function cmdCompile(args: string[]): number {
+/** @param {string[]} args */
+function cmdCompile(args) {
   const f = flags(args);
   if (!f.artifacts || !f.out) { process.stderr.write("--artifacts and --out are required\n"); return 2; }
 
   try {
     const result = compileAppsScript(f.artifacts, f.out, f.timezone ?? "Etc/UTC");
-    process.stdout.write(`compiled ${result.tabs} tab(s) to ${result.output}\n`);
+    process.stdout.write(`compiled ${result.tabs} tab(s) to ${result.output} [primitives: ${result.primitives.join(", ")}]\n`);
     return 0;
   } catch (error) {
     process.stderr.write(`compile: ${String(error)}\n`);
@@ -70,7 +77,8 @@ function cmdCompile(args: string[]): number {
   }
 }
 
-function cmdDeploy(args: string[]): number {
+/** @param {string[]} args */
+function cmdDeploy(args) {
   const f = flags(args);
   if (!f.project) { process.stderr.write("--project is required\n"); return 2; }
 
@@ -88,17 +96,18 @@ function cmdDeploy(args: string[]): number {
   }
 }
 
-async function cmdPublish(args: string[]): Promise<number> {
+/** @param {string[]} args */
+async function cmdPublish(args) {
   const f = flags(args);
   if (!f.artifact || !f.config) { process.stderr.write("--artifact and --config are required\n"); return 2; }
 
-  let m: Manifest;
-  try { m = readJson<Manifest>(join(f.artifact, "manifest.json")); } catch (e) { process.stderr.write(`manifest: ${String(e)}\n`); return 1; }
+  let m;
+  try { m = readJson(join(f.artifact, "manifest.json")); } catch (e) { process.stderr.write(`manifest: ${String(e)}\n`); return 1; }
   const mErr = validate(m);
   if (mErr) { process.stderr.write(`manifest: ${mErr}\n`); return 1; }
 
-  let d: Data;
-  try { d = readJson<Data>(join(f.artifact, "data.json")); } catch (e) { process.stderr.write(`data: ${String(e)}\n`); return 1; }
+  let d;
+  try { d = readJson(join(f.artifact, "data.json")); } catch (e) { process.stderr.write(`data: ${String(e)}\n`); return 1; }
   const cErr = checkCoverage(m, d);
   if (cErr) { process.stderr.write(`coverage: ${cErr}\n`); return 1; }
 
@@ -109,7 +118,8 @@ async function cmdPublish(args: string[]): Promise<number> {
   return 0;
 }
 
-async function cmdInspect(args: string[]): Promise<number> {
+/** @param {string[]} args */
+async function cmdInspect(args) {
   const f = flags(args);
   if (!f.config) { process.stderr.write("--config is required\n"); return 2; }
 
@@ -129,7 +139,7 @@ async function cmdInspect(args: string[]): Promise<number> {
   }
 }
 
-async function main(): Promise<number> {
+async function main() {
   const argv = process.argv.slice(2);
   const cmd = argv[0];
   switch (cmd) {

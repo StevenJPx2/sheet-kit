@@ -1,14 +1,15 @@
 /**
  * webhook — generic Apps Script web app for sheet-kit.
  *
- * Domain-agnostic. It authenticates a token, reads the manifest + data artifact
- * from Drive (written by `data`), and renders every tab through renderTab. There
- * are NO per-report functions — a new sheet needs no webhook change.
+ * Domain-agnostic transport. Authenticates a token, resolves the manifest
+ * (embedded by `sheet-kit compile`, else read from Drive), reads the data
+ * artifact, and renders every tab through renderTab (runtime/core.js). No
+ * per-report functions — a new sheet needs no webhook change.
  *
- * POST body: { token, manifest: "<drive filename>", data: "<drive filename>", expectedLatest? }
- *   token          — sha256 must match SHEETKIT_SECRET_HASH (set as a Script Property)
- *   manifest/data  — filenames in the mounted Drive folder to read
- *   expectedLatest — optional staleness handshake: reject if data is older
+ * POST { token, manifest?, data?, expectedLatest?, action? }
+ *   token          — sha256 must match Script Property SHEETKIT_SECRET_HASH
+ *   action=inspect — return spreadsheet structure (+ cells) instead of rendering
+ *   expectedLatest — staleness handshake: reject if the data is older
  */
 
 function doPost(event) {
@@ -40,10 +41,8 @@ function doPost(event) {
     var rendered = [];
     manifest.tabs.forEach(function (spec) {
       if (!Object.prototype.hasOwnProperty.call(data.datasets || {}, spec.data_key)) return;
-
       var rows = data.datasets[spec.data_key] || [];
-      var values = rowsToValues_(spec, rows);
-      rendered.push(renderTab(ss, spec, values));
+      rendered.push(renderTab(ss, spec, rowsToValues_(spec, rows)));
     });
 
     return jsonResponse_({ ok: true, tabs: rendered });
@@ -59,8 +58,8 @@ function compiledManifest_() {
 
 /**
  * Inspect spreadsheet structure, with optional cell-level detail for one sheet.
- * This runs inside Apps Script's existing Sheets authorization, so the CLI does
- * not need browser cookies or a separate OAuth credential.
+ * Runs inside Apps Script's existing Sheets authorization — the CLI needs no
+ * browser cookies or separate OAuth credential.
  */
 function inspectSpreadsheet_(spreadsheetId, payload) {
   var ss = SpreadsheetApp.openById(spreadsheetId);
@@ -80,7 +79,6 @@ function inspectSpreadsheet_(spreadsheetId, payload) {
       frozen_columns: sheet.getFrozenColumns(),
       merges: sheet.getDataRange().getMergedRanges().map(function (range) { return range.getA1Notation(); })
     };
-
     if (!includeCells) return result;
 
     var range = requestedRange ? sheet.getRange(requestedRange) : sheet.getDataRange();
@@ -103,46 +101,6 @@ function inspectSpreadsheet_(spreadsheetId, payload) {
     timezone: ss.getSpreadsheetTimeZone(),
     sheets: sheets
   };
-}
-
-/**
- * rowsToValues_ turns canonical row objects into the 2D display grid renderTab
- * expects:
- *   - an optional group-header row (when header_row >= 2) built from
- *     header_merges labels,
- *   - the column-name header row,
- *   - one row per record: source_field columns pull the value; formula columns
- *     emit a Sheets formula with {ColName} resolved to that row's A1 cells.
- */
-function rowsToValues_(spec, rows) {
-  var columns = spec.columns || [];
-  var headerRows = spec.header_row || 1;
-  var grid = [];
-
-  // Group-header row (row 0) from header_merges labels, when a 2-row header.
-  if (headerRows >= 2 && spec.header_merges) {
-    var groupRow = columns.map(function () { return ''; });
-    spec.header_merges.forEach(function (m) {
-      var from = columnIndex_(columns, m.from);
-      if (from > 0) groupRow[from - 1] = m.label;
-    });
-    grid.push(groupRow);
-  }
-  // Column-name header row (display header, or the unique name when unset).
-  grid.push(columns.map(function (c) { return c.header != null ? c.header : c.name; }));
-
-
-  // Data rows: source_field value, or a per-row resolved formula.
-  rows.forEach(function (row, i) {
-    var sheetRow = headerRows + 1 + i;
-    grid.push(columns.map(function (c) {
-      if (c.formula) return resolveFormula_(c.formula, columns, sheetRow);
-      if (c.source_field == null) return '';
-      var v = row[c.source_field];
-      return v == null ? '' : v;
-    }));
-  });
-  return grid;
 }
 
 /** Scan every string cell that looks like a date; return the max. */
@@ -185,8 +143,4 @@ function secureEqual_(left, right) {
 
 function jsonResponse_(value) {
   return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON);
-}
-
-if (typeof module !== 'undefined') {
-  module.exports = { rowsToValues_: rowsToValues_, dataLatestDate_: dataLatestDate_ };
 }

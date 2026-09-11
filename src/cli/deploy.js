@@ -2,14 +2,19 @@ import { spawnSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-export interface DeployOptions {
-  projectDir: string;
-  scriptId?: string;
-  deploymentId?: string;
-  description?: string;
-}
+/**
+ * @typedef {Object} DeployOptions
+ * @property {string}  projectDir
+ * @property {string} [scriptId]
+ * @property {string} [deploymentId]
+ * @property {string} [description]
+ */
 
-export function deployAppsScript(options: DeployOptions): void {
+/**
+ * Push a compiled Apps Script project and (re)deploy it via clasp.
+ * @param {DeployOptions} options
+ */
+export function deployAppsScript(options) {
   const manifest = join(options.projectDir, "appsscript.json");
   if (!existsSync(manifest)) throw new Error(`missing generated Apps Script manifest: ${manifest}`);
 
@@ -29,7 +34,11 @@ export function deployAppsScript(options: DeployOptions): void {
   runClasp(options.projectDir, args);
 }
 
-function runClasp(cwd: string, args: string[]): void {
+/**
+ * @param {string} cwd
+ * @param {string[]} args
+ */
+function runClasp(cwd, args) {
   const result = spawnSync("npx", ["--yes", "@google/clasp", ...args], { cwd, encoding: "utf8" });
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
