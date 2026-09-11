@@ -105,5 +105,5 @@ export async function publish(cfg, artifactDir, expectedLatest, log) {
  * @returns {PublishConfig}
  */
 export function loadPublishConfig(path) {
-  return JSON.parse(readFileSync(path, "utf8"));
+  return JSON.parse(readFileSync(path === "-" ? 0 : path, "utf8"));
 }

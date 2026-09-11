@@ -42,7 +42,10 @@ export default definePrimitive({
 
     (ctx.headers || []).forEach(function (h) {
       var style = styles.header || { bold: true, background: "#e8eef2", merge: false };
-      apply(ctx.sheet.getRange(h.row, 1, 1, ctx.width), style, h.row);
+      var range = ctx.sheet.getRange(h.row, 1, 1, ctx.width);
+      apply(range, style, h.row);
+      range.setWrap(true);
+      ctx.sheet.autoResizeRows(h.row, 1);
     });
   },
 });

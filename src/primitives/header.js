@@ -1,8 +1,8 @@
 import { definePrimitive } from "../utils/define-primitive.js";
 
-// header — header-row emphasis. Always runs: bolds + left-aligns the header
-// block, merges grouped-header spans (2-row headers, group labels on row 1),
-// and bolds any column flagged bold.
+// header — header-row emphasis. Always runs: bolds, left-aligns, and wraps the
+// header block, merges grouped-header spans (2-row headers, group labels on row
+// 1), and bolds any column flagged bold.
 export default definePrimitive({
   name: "header",
   field: null,
@@ -18,7 +18,11 @@ export default definePrimitive({
   render: function (ctx) {
     var sheet = ctx.sheet, columns = ctx.columns, width = ctx.width;
 
-    sheet.getRange(1, 1, ctx.headerRows, width).setFontWeight("bold").setHorizontalAlignment("left");
+    sheet.getRange(1, 1, ctx.headerRows, width)
+      .setFontWeight("bold")
+      .setHorizontalAlignment("left")
+      .setWrap(true);
+    sheet.autoResizeRows(1, ctx.headerRows);
 
     if (ctx.dataRowCount > 0) {
       columns.forEach(function (c, ci) {

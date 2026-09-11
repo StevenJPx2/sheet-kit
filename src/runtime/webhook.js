@@ -89,6 +89,9 @@ function inspectSpreadsheet_(spreadsheetId, payload) {
     result.backgrounds = range.getBackgrounds();
     result.font_weights = range.getFontWeights();
     result.horizontal_alignments = range.getHorizontalAlignments();
+    result.wrap_strategies = range.getWrapStrategies().map(function (row) {
+      return row.map(function (strategy) { return String(strategy); });
+    });
     return result;
   });
 
