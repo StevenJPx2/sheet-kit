@@ -61,6 +61,7 @@ export interface Tab {
   gradients?: Gradient[];
   charts?: Chart[];
   headings?: Record<string, HeadingStyle>;
+  auto_header?: boolean;
   [field: string]: unknown;
 }
 

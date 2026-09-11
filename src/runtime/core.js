@@ -80,16 +80,20 @@ function buildGrid_(spec, rows) {
   var sections = [];
   var headers = [];
 
-  if (headerRows >= 2 && spec.header_merges) {
-    var groupRow = columns.map(function () { return ''; });
-    spec.header_merges.forEach(function (m) {
-      var from = columnIndex_(columns, m.from);
-      if (from > 0) groupRow[from - 1] = m.label;
-    });
-    grid.push(groupRow);
+  // auto_header (default on): emit the group-header + column-name rows at the
+  // top. Sheets with headings ABOVE the column header (title/methodology) set
+  // auto_header:false and drive the header via a __header__ data row instead.
+  if (spec.auto_header !== false) {
+    if (headerRows >= 2 && spec.header_merges) {
+      var groupRow = columns.map(function () { return ''; });
+      spec.header_merges.forEach(function (m) {
+        var from = columnIndex_(columns, m.from);
+        if (from > 0) groupRow[from - 1] = m.label;
+      });
+      grid.push(groupRow);
+    }
+    grid.push(columns.map(function (c) { return c.header != null ? c.header : c.name; }));
   }
-
-  grid.push(columns.map(function (c) { return c.header != null ? c.header : c.name; }));
 
   (rows || []).forEach(function (row) {
     if (row && row.__section__ != null) {
