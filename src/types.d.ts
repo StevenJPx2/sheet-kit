@@ -62,6 +62,7 @@ export interface Tab {
   charts?: Chart[];
   headings?: Record<string, HeadingStyle>;
   auto_header?: boolean;
+  banner?: string | { text: string; level?: string };
   [field: string]: unknown;
 }
 

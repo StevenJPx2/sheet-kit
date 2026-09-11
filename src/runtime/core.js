@@ -84,6 +84,19 @@ function buildGrid_(spec, rows) {
   // top. Sheets with headings ABOVE the column header (title/methodology) set
   // auto_header:false and drive the header via a __header__ data row instead.
   if (spec.auto_header !== false) {
+    // Optional banner: a merged statement row ABOVE the grouped header. Its text
+    // may be a formula, resolved against the first DATA row (header_row + 1) so
+    // it can reference a specific data cell (e.g. the cumulative-row p-value).
+    if (spec.banner != null) {
+      var bannerText = typeof spec.banner === 'string' ? spec.banner : spec.banner.text;
+      var bannerVal = (typeof bannerText === 'string' && bannerText.charAt(0) === '=')
+        ? resolveFormula_(bannerText, columns, headerRows + 1)
+        : bannerText;
+      var bannerRow = columns.map(function () { return ''; });
+      bannerRow[0] = bannerVal;
+      grid.push(bannerRow);
+      sections.push({ row: grid.length, level: (typeof spec.banner === 'object' && spec.banner.level) || 'banner' });
+    }
     if (headerRows >= 2 && spec.header_merges) {
       var groupRow = columns.map(function () { return ''; });
       spec.header_merges.forEach(function (m) {

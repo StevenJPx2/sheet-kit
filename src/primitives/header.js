@@ -30,10 +30,13 @@ export default definePrimitive({
       });
     }
 
+    // Group labels live on the second-to-last header row (the row above the
+    // column names), so an optional banner above them doesn't shift the merge.
+    var groupRow = ctx.headerRows >= 2 ? ctx.headerRows - 1 : 1;
     (ctx.spec.header_merges || []).forEach(function (m) {
       var from = columnIndex_(columns, m.from);
       var to = columnIndex_(columns, m.to);
-      if (from > 0 && to > from) sheet.getRange(1, from, 1, to - from + 1).merge();
+      if (from > 0 && to > from) sheet.getRange(groupRow, from, 1, to - from + 1).merge();
     });
   },
 });
