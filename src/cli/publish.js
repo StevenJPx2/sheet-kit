@@ -35,7 +35,8 @@ export async function requestWebhook(cfg, payload) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Copy manifest.json + data.json into the mounted Drive folder, POST the
+ * Copy manifest.json + data.json into the mounted Drive folder under
+ * dataset-specific names, POST the
  * webhook, and run the Drive-sync staleness retry loop until the importer
  * confirms it rendered the just-written data. Returns an error message or "".
  * @param {PublishConfig} cfg
@@ -54,20 +55,32 @@ export async function publish(cfg, artifactDir, expectedLatest, log) {
   if (endpoint.protocol !== "https:" || !endpoint.host || !cfg.secret.trim()) return "invalid webhook config";
   if (!cfg.driveDir) return "driveDir is required";
 
-  for (const name of ["manifest.json", "data.json"]) {
+  let datasetKey;
+  try {
+    const data = JSON.parse(readFileSync(join(artifactDir, "data.json"), "utf8"));
+    const keys = Object.keys(data.datasets ?? {});
+    if (keys.length !== 1) return `publish requires exactly one dataset (found ${keys.length})`;
+    datasetKey = keys[0].replace(/[^A-Za-z0-9._-]/g, "_");
+  } catch (e) {
+    return `read data.json: ${String(e)}`;
+  }
+
+  const manifestName = `manifest.${datasetKey}.json`;
+  const dataName = `data.${datasetKey}.json`;
+  for (const [source, name] of [["manifest.json", manifestName], ["data.json", dataName]]) {
     const dst = join(cfg.driveDir, name);
     try {
       mkdirSync(dirname(dst), { recursive: true });
-      copyFileSync(join(artifactDir, name), dst);
+      copyFileSync(join(artifactDir, source), dst);
     } catch (e) {
-      return `stage ${name} to Drive: ${String(e)}`;
+      return `stage ${source} to Drive: ${String(e)}`;
     }
   }
 
   const body = JSON.stringify({
     token: cfg.secret.trim(),
-    manifest: "manifest.json",
-    data: "data.json",
+    manifest: manifestName,
+    data: dataName,
     expectedLatest,
   });
 
