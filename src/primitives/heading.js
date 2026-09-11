@@ -21,7 +21,11 @@ export default definePrimitive({
     var styles = ctx.spec.headings || {};
 
     function apply(range, style, row) {
-      if (style.merge !== false) range.merge();
+      var merged = style.merge !== false;
+      if (merged) range.merge();
+      // A merged heading wraps within its cell instead of overflowing across the
+      // row; a non-merged heading keeps its single cell (text may clip).
+      range.setWrap(merged);
       if (style.bold) range.setFontWeight("bold");
       if (style.italic) range.setFontStyle("italic");
       if (style.background) range.setBackground(style.background);

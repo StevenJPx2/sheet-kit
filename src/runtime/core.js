@@ -249,6 +249,10 @@ function skWriteTable_(sheet, values) {
   var resetCols = Math.max(sheet.getLastColumn(), width, 1);
 
   sheet.getRange(1, 1, resetRows, resetCols).breakApart();
+  // Reset frozen rows/cols too, so a prior freeze can't block this render's
+  // full-width heading merges (Sheets forbids merging across a frozen column).
+  sheet.setFrozenRows(0);
+  sheet.setFrozenColumns(0);
   sheet.clearContents();
   sheet.getRange(1, 1, resetRows, resetCols).clearFormat();
   sheet.setRowHeights(1, resetRows, 21);
