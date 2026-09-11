@@ -42,7 +42,7 @@ function doPost(event) {
     manifest.tabs.forEach(function (spec) {
       if (!Object.prototype.hasOwnProperty.call(data.datasets || {}, spec.data_key)) return;
       var rows = data.datasets[spec.data_key] || [];
-      rendered.push(renderTab(ss, spec, rowsToValues_(spec, rows)));
+      rendered.push(renderTab(ss, spec, rows));
     });
 
     return jsonResponse_({ ok: true, tabs: rendered });

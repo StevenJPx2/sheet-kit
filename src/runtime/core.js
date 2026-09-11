@@ -60,15 +60,25 @@ function resolveFormula_(formula, columns, sheetRow) {
 }
 
 /**
- * rowsToValues_ turns canonical row objects into the 2D display grid renderTab
- * expects: an optional group-header row (2-row headers), the column-name/header
- * row, then one row per record — source_field columns pull the value, formula
- * columns emit a per-row {ColName}→A1 formula.
+ * buildGrid_ turns canonical row objects into the 2D display grid plus metadata
+ * about non-data rows. It emits: an optional group-header row (2-row headers),
+ * the column-name/header row, then one row per record. A record with __section__
+ * becomes a merged heading row (text in col 1, rest blank); one with __header__
+ * re-emits the column headers (a stacked sub-table); otherwise it's a data row —
+ * source_field columns pull the value, formula columns emit a per-row {ColName}→A1
+ * formula. Every row occupies one grid slot, so formula A1 resolution stays
+ * correct even with headings interspersed.
+ *
+ * Returns { values, sections, headers } where sections/headers list the 1-based
+ * sheet rows of heading / repeated-header rows (+ heading level) for the heading
+ * primitive to merge and style.
  */
-function rowsToValues_(spec, rows) {
+function buildGrid_(spec, rows) {
   var columns = spec.columns || [];
   var headerRows = spec.header_row || 1;
   var grid = [];
+  var sections = [];
+  var headers = [];
 
   if (headerRows >= 2 && spec.header_merges) {
     var groupRow = columns.map(function () { return ''; });
@@ -81,8 +91,20 @@ function rowsToValues_(spec, rows) {
 
   grid.push(columns.map(function (c) { return c.header != null ? c.header : c.name; }));
 
-  rows.forEach(function (row, i) {
-    var sheetRow = headerRows + 1 + i;
+  (rows || []).forEach(function (row) {
+    if (row && row.__section__ != null) {
+      var blank = columns.map(function () { return ''; });
+      blank[0] = row.__section__;
+      grid.push(blank);
+      sections.push({ row: grid.length, level: row.__level || 'section' });
+      return;
+    }
+    if (row && row.__header__) {
+      grid.push(columns.map(function (c) { return c.header != null ? c.header : c.name; }));
+      headers.push({ row: grid.length });
+      return;
+    }
+    var sheetRow = grid.length + 1;
     grid.push(columns.map(function (c) {
       if (c.formula) return resolveFormula_(c.formula, columns, sheetRow);
       if (c.source_field == null) return '';
@@ -90,7 +112,13 @@ function rowsToValues_(spec, rows) {
       return v == null ? '' : v;
     }));
   });
-  return grid;
+
+  return { values: grid, sections: sections, headers: headers };
+}
+
+/** rowsToValues_ is the grid-only view of buildGrid_ (kept for callers/tests). */
+function rowsToValues_(spec, rows) {
+  return buildGrid_(spec, rows).values;
 }
 
 function rowKeyValue_(value) {
@@ -232,15 +260,21 @@ function skWriteTable_(sheet, values) {
 }
 
 /**
- * renderTab applies a manifest tab spec to `values`. Pure dispatch: writes the
- * table, then runs each primitive the compiler wired into SK_RENDER_STEPS.
- * Conditional-format primitives (gradient, textRule) push to ctx.cfRules, which
- * renderTab installs once at the end. No metric names, no domain branches.
+ * renderTab applies a manifest tab spec to canonical `rows`. It builds the grid
+ * (values + heading/header metadata), writes the table, then runs each primitive
+ * the compiler wired into SK_RENDER_STEPS. Conditional-format primitives push to
+ * ctx.cfRules, installed once at the end. No metric names, no domain branches.
+ *
+ * Back-compat: if called with a pre-built 2D grid (array of arrays), it renders
+ * that directly with no heading metadata.
  */
-function renderTab(spreadsheet, spec, values) {
+function renderTab(spreadsheet, spec, rows) {
   var sheet = spreadsheet.getSheetByName(spec.name) || spreadsheet.insertSheet(spec.name);
 
-  values = preserveSheetValues_(sheet, spec, normalizeWidth_(values));
+  var prebuilt = rows.length > 0 && Array.isArray(rows[0]);
+  var built = prebuilt ? { values: rows, sections: [], headers: [] } : buildGrid_(spec, rows);
+
+  var values = preserveSheetValues_(sheet, spec, normalizeWidth_(built.values));
   var written = skWriteTable_(sheet, values);
   var headerRows = spec.header_row || 1;
 
@@ -254,6 +288,8 @@ function renderTab(spreadsheet, spec, values) {
     headerRows: headerRows,
     firstDataRow: headerRows + 1,
     dataRowCount: Math.max(0, written.rows - headerRows),
+    sections: built.sections,
+    headers: built.headers,
     cfRules: [],
   };
 

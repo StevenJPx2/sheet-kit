@@ -3,6 +3,7 @@
 // it here. Order in this array is irrelevant; the compiler sorts by `order`.
 
 import header from "./header.js";
+import heading from "./heading.js";
 import numberFormat from "./numberFormat.js";
 import gradient from "./gradient.js";
 import textRule from "./textRule.js";
@@ -14,6 +15,7 @@ import chart from "./chart.js";
 /** @type {import("../utils/define-primitive.js").Primitive[]} */
 export const PRIMITIVES = [
   header,
+  heading,
   numberFormat,
   gradient,
   textRule,

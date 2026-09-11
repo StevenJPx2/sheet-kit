@@ -20,6 +20,8 @@
  * @property {number}    headerRows    Number of header rows.
  * @property {number}    firstDataRow  1-based sheet row of the first data row.
  * @property {number}    dataRowCount  Number of data rows.
+ * @property {Array<{row:number, level?:string}>} sections  1-based sheet rows of merged heading rows.
+ * @property {Array<{row:number}>}                 headers   1-based sheet rows of repeated sub-table headers.
  * @property {any[]}     cfRules       Collected conditional-format rules (gradient/textRule push here).
  */
 

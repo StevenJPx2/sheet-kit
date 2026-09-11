@@ -18,6 +18,35 @@ test("columnName_ produces A1 letters", () => {
   assert.equal(sandbox.columnName_(50), "AX");
 });
 
+test("buildGrid_ emits merged section + repeated header rows and keeps formula A1 correct", () => {
+  const spec = {
+    header_row: 1,
+    columns: [
+      { name: "Rank", header: "Rank", source_field: "rank" },
+      { name: "RPV", header: "RPV", formula: "={Rank}" },
+    ],
+  };
+  const rows = [
+    { __section__: "Previous day — 2026-09-10", __level: "period" },
+    { __header__: true },
+    { rank: 1 },
+    { __section__: "7-day", __level: "period" },
+    { rank: 2 },
+  ];
+  const built = sandbox.buildGrid_(spec, rows);
+  // grid: [colHeader, section, repeatedHeader, data(rank1), section, data(rank2)]
+  assert.equal(built.values.length, 6);
+  assert.equal(built.values[1][0], "Previous day — 2026-09-10");
+  assert.equal(built.values[2][0], "Rank"); // repeated header
+  // section rows are 1-based sheet rows 2 and 5; header repeat is row 3
+  assert.equal(JSON.stringify(built.sections.map((s) => s.row)), JSON.stringify([2, 5]));
+  assert.equal(JSON.stringify(built.headers.map((h) => h.row)), JSON.stringify([3]));
+  // the rank-1 data row is sheet row 4 → its RPV formula must resolve {Rank}→A4
+  assert.equal(built.values[3][1], "=A4");
+  // the rank-2 data row is sheet row 6 → A6
+  assert.equal(built.values[5][1], "=A6");
+});
+
 test("resolveFormula_ resolves {Name} to A1 for a row (IFERROR pattern)", () => {
   const columns = [{ name: "Sessions" }, { name: "Revenue" }];
   assert.equal(sandbox.resolveFormula_('=IFERROR({Revenue}/{Sessions},"")', columns, 8), '=IFERROR(B8/A8,"")');

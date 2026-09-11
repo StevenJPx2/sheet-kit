@@ -60,6 +60,7 @@ export interface Tab {
   column_widths?: ColumnWidth[];
   gradients?: Gradient[];
   charts?: Chart[];
+  headings?: Record<string, HeadingStyle>;
   [field: string]: unknown;
 }
 
@@ -69,7 +70,15 @@ export interface Manifest {
   tabs: Tab[];
 }
 
-export type Row = Record<string, string | number | null>;
+export interface HeadingStyle {
+  bold?: boolean; italic?: boolean; merge?: boolean;
+  background?: string; font_color?: string; font_size?: number;
+  align?: "left" | "center" | "right"; row_height?: number;
+}
+
+// A data row is metric fields, or a control row: __section__ (merged heading
+// text, optional __level) or __header__ (re-emit column headers).
+export type Row = Record<string, string | number | boolean | null | undefined>;
 export interface Data {
   contract_version: number;
   generated_at?: string;
