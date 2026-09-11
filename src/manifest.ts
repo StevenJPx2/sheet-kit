@@ -30,8 +30,12 @@ export interface RowLabelStyle { match: LabelMatch; style: RowStyle; }
 export interface Gradient {
   column: string;
   kind: GradientKind;
+  // Per-stop interpolation override (defaults: min/max = kind, mid = number).
+  min_kind?: GradientKind; mid_kind?: GradientKind; max_kind?: GradientKind;
   min_color?: string; mid_color?: string; max_color?: string;
   min_value?: number | string; mid_value?: number | string; max_value?: number | string;
+  // Partition the gradient into independent scales per contiguous run of this column's value.
+  group_by?: string;
 }
 
 export interface ChartPos { row?: number; col?: number; }
@@ -130,6 +134,7 @@ function validateTab(t: Tab): string {
   for (const g of t.gradients ?? []) {
     if (!names.has(g.column)) return `gradient references unknown column ${JSON.stringify(g.column)}`;
     if (!GRADIENT_KINDS.has(g.kind)) return `gradient on ${JSON.stringify(g.column)}: invalid kind ${JSON.stringify(g.kind)}`;
+    if (g.group_by != null && !names.has(g.group_by)) return `gradient on ${JSON.stringify(g.column)}: unknown group_by column ${JSON.stringify(g.group_by)}`;
   }
   for (const nf of t.number_formats ?? []) {
     if (!names.has(nf.column)) return `number_format references unknown column ${JSON.stringify(nf.column)}`;

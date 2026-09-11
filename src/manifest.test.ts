@@ -55,6 +55,15 @@ test("unknown chart series rejected", () => {
   assert.notEqual(validate(m), "");
 });
 
+test("gradient group_by must resolve to a column", () => {
+  const m = base();
+  m.tabs[0].gradients![0].group_by = "Nope";
+  assert.notEqual(validate(m), "");
+
+  m.tabs[0].gradients![0].group_by = "Date";
+  assert.equal(validate(m), "");
+});
+
 test("preserved columns require a valid row key", () => {
   const m = base();
   m.tabs[0].columns.push({ name: "Notes", type: "string", preserve: true });

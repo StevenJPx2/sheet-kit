@@ -128,12 +128,16 @@
       "properties": {
         "column": { "type": "string" },
         "kind": { "enum": ["number", "percent", "percentile", "min", "max"] },
+        "min_kind": { "enum": ["number", "percent", "percentile", "min", "max"] },
+        "mid_kind": { "enum": ["number", "percent", "percentile", "min", "max"] },
+        "max_kind": { "enum": ["number", "percent", "percentile", "min", "max"] },
         "min_color": { "type": "string" },
         "mid_color": { "type": "string" },
         "max_color": { "type": "string" },
         "min_value": { "type": ["number", "string"] },
         "mid_value": { "type": ["number", "string"] },
-        "max_value": { "type": ["number", "string"] }
+        "max_value": { "type": ["number", "string"] },
+        "group_by": { "type": "string" }
       }
     },
     "chart": {

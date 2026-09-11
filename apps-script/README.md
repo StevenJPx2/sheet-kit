@@ -21,6 +21,6 @@ webhook secret as a Script Property `SHEETKIT_SECRET_HASH` (sha256 of the token)
 ## Adding a styling primitive
 
 1. Add the primitive fn to `sheetkit.js` and dispatch it in `renderTab`.
-2. Add its field to `../contract/manifest.schema.json` and the Go structs in
-   `../internal/manifest/manifest.go`.
-3. `data` emits the field in a report config; nothing else changes.
+2. Add its field to `../contract/manifest.schema.json` and the `../src/manifest.ts`
+   types (`Column`/`Tab`/`Gradient`/…), extending `validate` if it references a column.
+3. `mpd` emits the field in a report config; nothing else changes.
