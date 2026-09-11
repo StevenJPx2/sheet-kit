@@ -34,11 +34,21 @@ export default definePrimitive({
       var midInterp = INTERP[g.mid_kind || "number"] || "NUMBER";
       var maxInterp = INTERP[g.max_kind || g.kind] || "PERCENTILE";
 
-      rule.setGradientMinpointWithValue(g.min_color || "#ea4335", SpreadsheetApp.InterpolationType[minInterp], String(g.min_value != null ? g.min_value : 2));
+      // MIN/MAX endpoints auto-anchor to the range's actual extremes (linear, not
+      // rank-based) — use the no-value setters; NUMBER/PERCENT/PERCENTILE take a value.
+      if ((g.min_kind || g.kind) === "min") {
+        rule.setGradientMinpoint(g.min_color || "#ea4335");
+      } else {
+        rule.setGradientMinpointWithValue(g.min_color || "#ea4335", SpreadsheetApp.InterpolationType[minInterp], String(g.min_value != null ? g.min_value : 2));
+      }
       if (g.mid_color != null) {
         rule.setGradientMidpointWithValue(g.mid_color, SpreadsheetApp.InterpolationType[midInterp], String(g.mid_value != null ? g.mid_value : 0));
       }
-      rule.setGradientMaxpointWithValue(g.max_color || "#34a853", SpreadsheetApp.InterpolationType[maxInterp], String(g.max_value != null ? g.max_value : 98));
+      if ((g.max_kind || g.kind) === "max") {
+        rule.setGradientMaxpoint(g.max_color || "#34a853");
+      } else {
+        rule.setGradientMaxpointWithValue(g.max_color || "#34a853", SpreadsheetApp.InterpolationType[maxInterp], String(g.max_value != null ? g.max_value : 98));
+      }
 
       ctx.cfRules.push(rule.setRanges(runs.map(function (run) {
         return ctx.sheet.getRange(run.firstRow, column, run.rowCount, 1);
