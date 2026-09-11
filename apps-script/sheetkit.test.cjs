@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { columnName_, columnIndex_, normalizeWidth_, matchLabel_, preserveValues_, rowKeyValue_ } = require('./sheetkit.js');
+const { columnName_, columnIndex_, gradientRuns_, normalizeWidth_, matchLabel_, preserveValues_, rowKeyValue_ } = require('./sheetkit.js');
 
 // A1 resolver — the off-by-one killer.
 assert.equal(columnName_(1), 'A');
@@ -16,6 +16,18 @@ assert.equal(columnIndex_(cols, 'Missing'), 0);
 // ragged rows padded to common width.
 const padded = normalizeWidth_([['a'], ['b', 'c', 'd'], []]);
 assert.deepEqual(padded, [['a', '', ''], ['b', 'c', 'd'], ['', '', '']]);
+
+// Gradient groups get independent contiguous percentile ranges.
+assert.deepEqual(
+  gradientRuns_([
+    ['Section', 'Value'],
+    ['Previous day', 1],
+    ['Previous day', 2],
+    ['7-day', 3],
+    ['7-day', 4],
+  ], [{ name: 'Section' }, { name: 'Value' }], 2, 4, 'Section'),
+  [{ firstRow: 2, rowCount: 2 }, { firstRow: 4, rowCount: 2 }],
+);
 
 // label matching: prefix/suffix/equals, no accidental match on empty spec.
 assert.ok(matchLabel_('7-day aggregate', { prefix: '7-day' }));

@@ -17,6 +17,25 @@ interface WebhookResult {
   error?: string;
 }
 
+export async function requestWebhook(
+  cfg: PublishConfig,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const endpoint = new URL(cfg.url);
+  if (endpoint.protocol !== "https:" || !endpoint.host || !cfg.secret.trim()) throw new Error("invalid webhook config");
+
+  const response = await fetch(cfg.url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...payload, token: cfg.secret.trim() }),
+  });
+  if (!response.ok) throw new Error(`webhook HTTP ${response.status}`);
+
+  const result = await response.json() as Record<string, unknown>;
+  if (!result.ok) throw new Error(String(result.error ?? "webhook rejected request"));
+  return result;
+}
+
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**

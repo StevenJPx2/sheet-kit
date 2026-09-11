@@ -19,7 +19,12 @@ function doPost(event) {
       return jsonResponse_({ ok: false, error: 'unauthorized' });
     }
 
-    var manifest = readJsonByName_(String(payload.manifest || 'manifest.json'));
+    var manifest = compiledManifest_() || readJsonByName_(String(payload.manifest || 'manifest.json'));
+
+    if (payload.action === 'inspect') {
+      return jsonResponse_({ ok: true, spreadsheet: inspectSpreadsheet_(manifest.spreadsheet_id, payload) });
+    }
+
     var data = readJsonByName_(String(payload.data || 'data.json'));
 
     if (manifest.contract_version !== 1 || data.contract_version !== 1) {
@@ -34,6 +39,8 @@ function doPost(event) {
     var ss = SpreadsheetApp.openById(manifest.spreadsheet_id);
     var rendered = [];
     manifest.tabs.forEach(function (spec) {
+      if (!Object.prototype.hasOwnProperty.call(data.datasets || {}, spec.data_key)) return;
+
       var rows = data.datasets[spec.data_key] || [];
       var values = rowsToValues_(spec, rows);
       rendered.push(renderTab(ss, spec, values));
@@ -43,6 +50,59 @@ function doPost(event) {
   } catch (error) {
     return jsonResponse_({ ok: false, error: String((error && error.message) || error) });
   }
+}
+
+/** Return the manifest embedded by `sheet-kit compile`, when present. */
+function compiledManifest_() {
+  return typeof SHEETKIT_MANIFEST === 'undefined' ? null : SHEETKIT_MANIFEST;
+}
+
+/**
+ * Inspect spreadsheet structure, with optional cell-level detail for one sheet.
+ * This runs inside Apps Script's existing Sheets authorization, so the CLI does
+ * not need browser cookies or a separate OAuth credential.
+ */
+function inspectSpreadsheet_(spreadsheetId, payload) {
+  var ss = SpreadsheetApp.openById(spreadsheetId);
+  var requestedSheet = String(payload.sheet || '');
+  var requestedRange = String(payload.range || '');
+  var includeCells = Boolean(payload.cells);
+
+  var sheets = ss.getSheets().filter(function (sheet) {
+    return !requestedSheet || sheet.getName() === requestedSheet;
+  }).map(function (sheet) {
+    var result = {
+      name: sheet.getName(),
+      id: sheet.getSheetId(),
+      rows: sheet.getLastRow(),
+      columns: sheet.getLastColumn(),
+      frozen_rows: sheet.getFrozenRows(),
+      frozen_columns: sheet.getFrozenColumns(),
+      merges: sheet.getDataRange().getMergedRanges().map(function (range) { return range.getA1Notation(); })
+    };
+
+    if (!includeCells) return result;
+
+    var range = requestedRange ? sheet.getRange(requestedRange) : sheet.getDataRange();
+    result.range = range.getA1Notation();
+    result.values = range.getDisplayValues();
+    result.formulas = range.getFormulas();
+    result.number_formats = range.getNumberFormats();
+    result.backgrounds = range.getBackgrounds();
+    result.font_weights = range.getFontWeights();
+    result.horizontal_alignments = range.getHorizontalAlignments();
+    return result;
+  });
+
+  if (requestedSheet && sheets.length === 0) throw new Error('sheet not found: ' + requestedSheet);
+
+  return {
+    id: ss.getId(),
+    name: ss.getName(),
+    locale: ss.getSpreadsheetLocale(),
+    timezone: ss.getSpreadsheetTimeZone(),
+    sheets: sheets
+  };
 }
 
 /**

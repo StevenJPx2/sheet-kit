@@ -1,13 +1,13 @@
 # sheet-kit
 
-Domain-agnostic Google Sheets rendering framework. Takes a resolved
-**manifest** + **data** artifact (emitted by `data`) and publishes it. Knows
-nothing about GA4, Raven, or experiments.
+Domain-agnostic Google Sheets toolkit. It owns the manifest contract, styling
+and formula primitives, Apps Script generation, publishing, and inspection.
+It knows nothing about GA4, Raven, merchants, or reports.
 
 Part of the four-repo performance-reporting split — see
 `ga4-querinator/docs/ARCHITECTURE-IDEATION.md`. Dependency direction:
-`data → {ga4-querinator, jiraiya, sheet-kit}`. sheet-kit is a leaf: it never
-imports a source or `data`.
+`mpd → {ga4-querinator, jiraiya, sheet-kit}`. sheet-kit is a leaf: it never
+imports a source or MPD.
 
 ## Contract (v1)
 
@@ -26,6 +26,13 @@ render time, which kills the off-by-one A1-letter bug class.
 
 Contract version lives in [`contract/VERSION`](contract/VERSION) and is enforced
 on both files.
+
+## Ownership
+
+MPD declares which sheet-kit primitives a report uses. sheet-kit implements
+their behavior and compiles resolved manifests into an Apps Script project.
+The checked-in Apps Script contains only generic primitives and transport code;
+the generated `manifest.gs` is the application-specific output.
 
 ## Manifest scope discipline
 
@@ -58,7 +65,10 @@ scriptc escape hatch stays 100% static.
 
 ```sh
 sheet-kit validate --manifest manifest.json [--data data.json]
+sheet-kit compile  --artifacts mpd/out --out generated/apps-script
+sheet-kit deploy   --project generated/apps-script --script-id ID [--deployment-id ID]
 sheet-kit publish  --artifact DIR --config webhook.json [--expected-latest DATE]
+sheet-kit inspect  --config webhook.json --spreadsheet-id ID [--sheet NAME] [--range A1] [--cells]
 sheet-kit version
 ```
 
@@ -67,3 +77,13 @@ column, every referenced column name resolves) and, with `--data`, that every
 tab's dataset is present. `publish` stages `manifest.json` + `data.json` from
 `--artifact` into the mounted Drive folder (`config.driveDir`) and POSTs the
 generic webhook with the Drive-sync staleness retry loop.
+
+`compile` validates every artifact below `--artifacts`, combines its tabs, and
+emits `sheetkit.gs`, `webhook.gs`, `manifest.gs`, and `appsscript.json`. `deploy`
+owns the clasp push/deployment step. The generated webhook embeds the sheet definition;
+daily publishes only supply changing data.
+
+`inspect` uses the authenticated generated webhook to read spreadsheet and tab
+metadata. `--cells` also returns displayed values, formulas, number formats,
+backgrounds, font weights, and horizontal alignments for the requested range.
+It does not depend on private Sheets web endpoints or browser cookies.

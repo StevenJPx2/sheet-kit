@@ -202,15 +202,45 @@ var SK_INTERP = { number: 'NUMBER', percent: 'PERCENT', percentile: 'PERCENTILE'
 /** Build one percentile/number gradient rule over a column range. */
 function skGradientRule_(sheet, g) {
   var b = SpreadsheetApp.newConditionalFormatRule();
-  var interp = SK_INTERP[g.kind] || 'PERCENTILE';
+  var minInterp = SK_INTERP[g.minKind || g.kind] || 'PERCENTILE';
+  var midInterp = SK_INTERP[g.midKind || 'number'] || 'NUMBER';
+  var maxInterp = SK_INTERP[g.maxKind || g.kind] || 'PERCENTILE';
 
-  b.setGradientMinpointWithValue(g.minColor || '#ea4335', SpreadsheetApp.InterpolationType[interp], String(g.minValue != null ? g.minValue : 2));
+  b.setGradientMinpointWithValue(g.minColor || '#ea4335', SpreadsheetApp.InterpolationType[minInterp], String(g.minValue != null ? g.minValue : 2));
   if (g.midColor != null) {
-    b.setGradientMidpointWithValue(g.midColor, SpreadsheetApp.InterpolationType.NUMBER, String(g.midValue != null ? g.midValue : 0));
+    b.setGradientMidpointWithValue(g.midColor, SpreadsheetApp.InterpolationType[midInterp], String(g.midValue != null ? g.midValue : 0));
   }
-  b.setGradientMaxpointWithValue(g.maxColor || '#34a853', SpreadsheetApp.InterpolationType[interp], String(g.maxValue != null ? g.maxValue : 98));
+  b.setGradientMaxpointWithValue(g.maxColor || '#34a853', SpreadsheetApp.InterpolationType[maxInterp], String(g.maxValue != null ? g.maxValue : 98));
 
-  return b.setRanges([sheet.getRange(g.firstRow, g.column, g.rowCount, 1)]).build();
+  var runs = g.runs || [{ firstRow: g.firstRow, rowCount: g.rowCount }];
+  return b.setRanges(runs.map(function (run) {
+    return sheet.getRange(run.firstRow, g.column, run.rowCount, 1);
+  })).build();
+}
+
+/** Partition a gradient into contiguous row runs when it has a group_by column. */
+function gradientRuns_(values, columns, firstDataRow, dataRowCount, groupBy) {
+  if (!groupBy) return [{ firstRow: firstDataRow, rowCount: dataRowCount }];
+
+  var groupColumn = columnIndex_(columns, groupBy);
+  if (groupColumn < 1) throw new Error('unknown gradient group_by column: ' + groupBy);
+
+  var runs = [];
+  var start = firstDataRow;
+  var lastGroup;
+  for (var offset = 0; offset < dataRowCount; offset++) {
+    var row = firstDataRow + offset;
+    var group = String((values[row - 1] || [])[groupColumn - 1] || '');
+
+    if (offset > 0 && group !== lastGroup) {
+      runs.push({ firstRow: start, rowCount: row - start });
+      start = row;
+    }
+    lastGroup = group;
+  }
+
+  if (dataRowCount > 0) runs.push({ firstRow: start, rowCount: firstDataRow + dataRowCount - start });
+  return runs;
 }
 
 /** textRules: [{equals, color}] over the whole data range. */
@@ -351,8 +381,10 @@ function renderTab(spreadsheet, spec, values) {
     var rules = spec.gradients.map(function (g) {
       return skGradientRule_(sheet, {
         column: columnIndex_(columns, g.column), firstRow: firstDataRow, rowCount: dataRowCount, kind: g.kind,
+        minKind: g.min_kind, midKind: g.mid_kind, maxKind: g.max_kind,
         minColor: g.min_color, midColor: g.mid_color, maxColor: g.max_color,
-        minValue: g.min_value, midValue: g.mid_value, maxValue: g.max_value
+        minValue: g.min_value, midValue: g.mid_value, maxValue: g.max_value,
+        runs: gradientRuns_(values, columns, firstDataRow, dataRowCount, g.group_by)
       });
     }).filter(function (rule) { return rule != null; });
     if (spec.text_rules) {
@@ -391,5 +423,5 @@ function renderTab(spreadsheet, spec, values) {
 
 // CommonMS/Node test hook (Apps Script ignores module).
 if (typeof module !== 'undefined') {
-  module.exports = { columnName_: columnName_, columnIndex_: columnIndex_, normalizeWidth_: normalizeWidth_, matchLabel_: matchLabel_, preserveValues_: preserveValues_, resolveFormula_: resolveFormula_, rowKeyValue_: rowKeyValue_ };
+  module.exports = { columnName_: columnName_, columnIndex_: columnIndex_, gradientRuns_: gradientRuns_, normalizeWidth_: normalizeWidth_, matchLabel_: matchLabel_, preserveValues_: preserveValues_, resolveFormula_: resolveFormula_, rowKeyValue_: rowKeyValue_ };
 }
