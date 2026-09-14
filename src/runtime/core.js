@@ -291,15 +291,11 @@ function skWriteTable_(sheet, values) {
  * (values + heading/header metadata), writes the table, then runs each primitive
  * the compiler wired into SK_RENDER_STEPS. Conditional-format primitives push to
  * ctx.cfRules, installed once at the end. No metric names, no domain branches.
- *
- * Back-compat: if called with a pre-built 2D grid (array of arrays), it renders
- * that directly with no heading metadata.
  */
 function renderTab(spreadsheet, spec, rows) {
   var sheet = spreadsheet.getSheetByName(spec.name) || spreadsheet.insertSheet(spec.name);
 
-  var prebuilt = rows.length > 0 && Array.isArray(rows[0]);
-  var built = prebuilt ? { values: rows, sections: [], headers: [] } : buildGrid_(spec, rows);
+  var built = buildGrid_(spec, rows);
 
   var values = preserveSheetValues_(sheet, spec, normalizeWidth_(built.values));
   var written = skWriteTable_(sheet, values);
