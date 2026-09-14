@@ -14,6 +14,7 @@ import { deployAppsScript } from "./deploy.js";
 import { CONTRACT_VERSION, validate } from "../utils/validate.js";
 import { checkCoverage, validateData } from "../utils/data.js";
 import { loadPublishConfig, publish, requestWebhook } from "./publish.js";
+import { cmdSkills } from "./skills.js";
 
 /**
  * Minimal --flag value parser (order-independent).
@@ -149,8 +150,9 @@ async function main() {
     case "deploy": return cmdDeploy(argv.slice(1));
     case "publish": return await cmdPublish(argv.slice(1));
     case "inspect": return await cmdInspect(argv.slice(1));
+    case "skills": return cmdSkills(argv.slice(1));
     default:
-      process.stderr.write("usage: sheet-kit <validate|compile|deploy|publish|inspect|version> [flags]\n");
+      process.stderr.write("usage: sheet-kit <validate|compile|deploy|publish|inspect|skills|version> [flags]\n");
       return 2;
   }
 }
