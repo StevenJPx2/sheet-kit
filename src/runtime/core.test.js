@@ -47,6 +47,27 @@ test("buildGrid_ emits merged section + repeated header rows and keeps formula A
   assert.equal(built.values[5][1], "=A6");
 });
 
+test("buildGrid_ resolves a formula section heading against its block's next data row", () => {
+  const spec = {
+    header_row: 1,
+    columns: [
+      { name: "Date", header: "Date", source_field: "date" },
+      { name: "p", header: "p", source_field: "p" },
+    ],
+  };
+  const rows = [
+    { __section__: "Experiment: A", __level: "experiment" },
+    { __section__: '=IF({p}<0.2,"YES","no")', __level: "significance" },
+    { date: "cum", p: 0.03 },
+    { date: "2026-09-04", p: 0.5 },
+  ];
+  const grid = sandbox.buildGrid_(spec, rows).values;
+  // grid: [colHeader, titleSection, statsigSection, cumRow(4), dailyRow(5)]
+  // statsig heading must resolve {p} to the cumulative row (sheet row 4) → B4.
+  assert.equal(grid[2][0], '=IF(B4<0.2,"YES","no")');
+  assert.equal(grid[1][0], "Experiment: A"); // plain text heading untouched
+});
+
 test("resolveFormula_ resolves {Name} to A1 for a row (IFERROR pattern)", () => {
   const columns = [{ name: "Sessions" }, { name: "Revenue" }];
   assert.equal(sandbox.resolveFormula_('=IFERROR({Revenue}/{Sessions},"")', columns, 8), '=IFERROR(B8/A8,"")');

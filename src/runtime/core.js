@@ -108,10 +108,21 @@ function buildGrid_(spec, rows) {
     grid.push(columns.map(function (c) { return c.header != null ? c.header : c.name; }));
   }
 
-  (rows || []).forEach(function (row) {
+  var dataStart = grid.length; // grid row of rows[0] is dataStart + 1
+  (rows || []).forEach(function (row, idx) {
     if (row && row.__section__ != null) {
       var blank = columns.map(function () { return ''; });
-      blank[0] = row.__section__;
+      var text = row.__section__;
+      // A section heading may itself be a formula (e.g. a per-block statsig
+      // header). Resolve its {Col} refs against this block's next data row — the
+      // first following non-heading row (its cumulative row) — so each stacked
+      // block reads its OWN cells, not the sheet's first data row.
+      if (typeof text === 'string' && text.charAt(0) === '=') {
+        var di = idx + 1;
+        while (di < rows.length && rows[di] && (rows[di].__section__ != null || rows[di].__header__)) di++;
+        text = resolveFormula_(text, columns, dataStart + di + 1);
+      }
+      blank[0] = text;
       grid.push(blank);
       sections.push({ row: grid.length, level: row.__level || 'section' });
       return;
