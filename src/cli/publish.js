@@ -39,6 +39,22 @@ export async function requestWebhook(cfg, payload) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Stage a file into the mounted Drive folder, retrying the transient Google
+// Drive File Stream FUSE error ("Unknown system error -11") that fires while it
+// syncs. Exponential backoff (~30s total, 8 attempts); copy/wait are injectable
+// for tests.
+export async function stageWithRetry(src, dest, copy = copyFileSync, wait = sleep) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      copy(src, dest);
+      return;
+    } catch (error) {
+      if (attempt === 7) throw error;
+      await wait(Math.min(500 * 2 ** attempt, 8000));
+    }
+  }
+}
+
 /**
  * Copy one uniquely named data file into the mounted Drive folder, POST the
  * filename, and run the Drive-sync staleness retry loop until the importer
@@ -72,14 +88,10 @@ export async function publish(cfg, artifactDir, expectedLatest, log) {
   const dataName = `data.${datasetKey}.json`;
   const destination = join(expandHome(cfg.driveDir), dataName);
   mkdirSync(dirname(destination), { recursive: true });
-  for (let attempt = 0; attempt < 6; attempt++) {
-    try {
-      copyFileSync(join(artifactDir, "data.json"), destination);
-      break;
-    } catch (error) {
-      if (attempt === 5) return `stage data.json to Drive: ${String(error)}`;
-      await sleep(1000);
-    }
+  try {
+    await stageWithRetry(join(artifactDir, "data.json"), destination);
+  } catch (error) {
+    return `stage data.json to Drive: ${String(error)}`;
   }
 
   const body = JSON.stringify({

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { publish } from "./publish.js";
+import { publish, stageWithRetry } from "./publish.js";
 
 test("loadPublishConfig reads stdin when path is dash", () => {
   const script = `
@@ -46,4 +46,24 @@ test("publish stages dataset-specific files", async () => {
     globalThis.fetch = previousFetch;
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("stageWithRetry retries the transient Drive copy error, then succeeds", async () => {
+  let calls = 0;
+  const copy = () => {
+    calls++;
+    if (calls < 3) throw new Error("Unknown system error -11");
+  };
+  await stageWithRetry("src", "dest", copy, async () => {});
+  assert.equal(calls, 3);
+});
+
+test("stageWithRetry gives up and throws after 8 attempts", async () => {
+  let calls = 0;
+  const copy = () => {
+    calls++;
+    throw new Error("Unknown system error -11");
+  };
+  await assert.rejects(stageWithRetry("src", "dest", copy, async () => {}), /-11/);
+  assert.equal(calls, 8);
 });
