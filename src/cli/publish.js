@@ -1,6 +1,7 @@
 // Stage the artifact to the mounted Google Drive folder and trigger the generic
 // Apps Script webhook to render it. Domain-agnostic: move files + POST a token.
 import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -75,12 +76,17 @@ export async function publish(cfg, artifactDir, expectedLatest, log) {
   if (endpoint.protocol !== "https:" || !endpoint.host || !cfg.secret.trim()) return "invalid webhook config";
   if (!cfg.driveDir) return "driveDir is required";
 
-  let datasetKey;
+  let datasetKey, expectedHash;
   try {
-    const data = JSON.parse(readFileSync(join(artifactDir, "data.json"), "utf8"));
+    const raw = readFileSync(join(artifactDir, "data.json"), "utf8");
+    const data = JSON.parse(raw);
     const keys = Object.keys(data.datasets ?? {});
     if (keys.length !== 1) return `publish requires exactly one dataset (found ${keys.length})`;
     datasetKey = keys[0].replace(/[^A-Za-z0-9._-]/g, "_");
+    // Content hash of the exact bytes we stage: the webhook renders only once the
+    // Drive file it reads hashes to this, so a same-date content revision is no
+    // longer masked by the max-date handshake + Drive sync lag.
+    expectedHash = createHash("sha256").update(raw).digest("hex");
   } catch (e) {
     return `read data.json: ${String(e)}`;
   }
@@ -98,24 +104,37 @@ export async function publish(cfg, artifactDir, expectedLatest, log) {
     token: cfg.secret.trim(),
     data: dataName,
     expectedLatest,
+    expectedHash,
   });
 
   const deadline = Date.now() + 5 * 60_000;
   let transientRetries = 0;
   for (;;) {
-    let result;
+    let result, resp, text;
     try {
-      const resp = await fetch(cfg.url, { method: "POST", headers: { "content-type": "application/json" }, body });
-      if (!resp.ok) return `webhook HTTP ${resp.status}`;
-      result = await resp.json();
+      resp = await fetch(cfg.url, { method: "POST", headers: { "content-type": "application/json" }, body });
+      text = await resp.text();
     } catch (e) {
       return `webhook request: ${String(e)}`;
+    }
+    try {
+      result = JSON.parse(text);
+    } catch {
+      // Apps Script intermittently serves an HTML error page ("<!DOCTYPE …")
+      // instead of JSON; treat it as transient and retry.
+      if (transientRetries < 3) {
+        transientRetries++;
+        log(`non-JSON webhook response (HTTP ${resp.status}); retry ${transientRetries}/3 in 10s`);
+        await sleep(10_000);
+        continue;
+      }
+      return `webhook returned non-JSON after ${transientRetries} retries (HTTP ${resp.status})`;
     }
 
     if (result.ok) return "";
     if (result.stale) {
-      if (Date.now() > deadline) return `sheet still stale after retries (latest=${result.latest}, want ${expectedLatest})`;
-      log(`artifact not synced yet (latest=${result.latest}, want ${expectedLatest}); retrying in 15s`);
+      if (Date.now() > deadline) return `sheet still stale after retries (Drive not synced; latest=${result.latest})`;
+      log(`artifact not synced to Drive yet (latest=${result.latest}); retrying in 15s`);
       await sleep(15_000);
       continue;
     }

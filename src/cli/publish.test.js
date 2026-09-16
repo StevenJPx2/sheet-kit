@@ -48,6 +48,33 @@ test("publish stages dataset-specific files", async () => {
   }
 });
 
+test("publish sends a content hash of the staged data.json", async () => {
+  const { createHash } = await import("node:crypto");
+  const root = mkdtempSync(join(tmpdir(), "sheet-kit-hash-"));
+  const artifact = join(root, "artifact");
+  const drive = join(root, "drive");
+  mkdirSync(artifact);
+  const dataRaw = JSON.stringify({ datasets: { daily: [{ date: "2026-09-14", v: 1 }] } });
+  writeFileSync(join(artifact, "manifest.json"), "{}\n");
+  writeFileSync(join(artifact, "data.json"), dataRaw);
+
+  const previousFetch = globalThis.fetch;
+  let payload;
+  globalThis.fetch = async (_url, options) => {
+    payload = JSON.parse(String(options?.body));
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+
+  try {
+    const error = await publish({ url: "https://example.com", secret: "x", driveDir: drive }, artifact, "2026-09-14", () => {});
+    assert.equal(error, "");
+    assert.equal(payload.expectedHash, createHash("sha256").update(dataRaw).digest("hex"));
+  } finally {
+    globalThis.fetch = previousFetch;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("stageWithRetry retries the transient Drive copy error, then succeeds", async () => {
   let calls = 0;
   const copy = () => {

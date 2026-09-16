@@ -28,15 +28,27 @@ function doPost(event) {
       return jsonResponse_({ ok: true, spreadsheet: inspectSpreadsheet_(inspectId, payload) });
     }
 
-    var data = readJsonByName_(String(payload.data || 'data.json'));
+    var raw = readRawByName_(String(payload.data || 'data.json'));
+    var data = JSON.parse(raw);
 
     if (manifest.contract_version !== 1 || data.contract_version !== 1) {
       return jsonResponse_({ ok: false, error: 'unsupported contract_version' });
     }
 
-    var expectedLatest = String(payload.expectedLatest || '');
-    if (expectedLatest && dataLatestDate_(data) < expectedLatest) {
-      return jsonResponse_({ ok: false, stale: true, latest: dataLatestDate_(data) });
+    // Staleness handshake. Prefer a content hash: the CLI sends the sha256 of the
+    // exact bytes it staged, so we only render once Drive has synced that precise
+    // file — even when the content changed but the max date did not. Fall back to
+    // the max-date check for callers that don't send a hash.
+    var expectedDataHash = String(payload.expectedHash || '');
+    if (expectedDataHash) {
+      if (sha256_(raw) !== expectedDataHash) {
+        return jsonResponse_({ ok: false, stale: true, latest: dataLatestDate_(data), reason: 'hash' });
+      }
+    } else {
+      var expectedLatest = String(payload.expectedLatest || '');
+      if (expectedLatest && dataLatestDate_(data) < expectedLatest) {
+        return jsonResponse_({ ok: false, stale: true, latest: dataLatestDate_(data) });
+      }
     }
 
     var ss = SpreadsheetApp.openById(manifest.spreadsheet_id);
@@ -127,7 +139,7 @@ function dataLatestDate_(data) {
   return latest;
 }
 
-function readJsonByName_(name) {
+function readRawByName_(name) {
   var files = DriveApp.getFilesByName(name);
   var newest = null;
   while (files.hasNext()) {
@@ -135,7 +147,7 @@ function readJsonByName_(name) {
     if (!newest || f.getLastUpdated() > newest.getLastUpdated()) newest = f;
   }
   if (!newest) throw new Error('artifact not found by name: ' + name);
-  return JSON.parse(newest.getBlob().getDataAsString());
+  return newest.getBlob().getDataAsString();
 }
 
 function sha256_(value) {
