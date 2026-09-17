@@ -265,7 +265,7 @@ function gradientRuns_(values, columns, firstDataRow, dataRowCount, groupBy) {
 }
 
 /** Write a fresh table: clear content/format/rules, reset heights, set values. */
-function skWriteTable_(sheet, values) {
+function skWriteTable_(sheet, values, columns) {
   var padded = normalizeWidth_(values);
   var width = padded.length ? padded[0].length : 1;
   var resetRows = Math.max(sheet.getLastRow(), padded.length, 1);
@@ -280,6 +280,15 @@ function skWriteTable_(sheet, values) {
   sheet.getRange(1, 1, resetRows, resetCols).clearFormat();
   sheet.setRowHeights(1, resetRows, 21);
   sheet.setConditionalFormatRules([]);
+
+  // String columns hold display text ("$2.38", "3.5%"): force them to text
+  // format BEFORE setValues so Sheets can't auto-parse them into rounded
+  // numbers. Must precede the write — coercion is lossy once it happens.
+  (columns || []).forEach(function (c, i) {
+    if (c && c.type === "string" && i < width) {
+      sheet.getRange(1, i + 1, Math.max(padded.length, 1), 1).setNumberFormat("@");
+    }
+  });
 
   if (padded.length) sheet.getRange(1, 1, padded.length, width).setValues(padded);
 
@@ -298,7 +307,7 @@ function renderTab(spreadsheet, spec, rows) {
   var built = buildGrid_(spec, rows);
 
   var values = preserveSheetValues_(sheet, spec, normalizeWidth_(built.values));
-  var written = skWriteTable_(sheet, values);
+  var written = skWriteTable_(sheet, values, spec.columns || []);
   var headerRows = spec.header_row || 1;
 
   var ctx = {

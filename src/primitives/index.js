@@ -7,6 +7,7 @@ import heading from "./heading.js";
 import numberFormat from "./numberFormat.js";
 import gradient from "./gradient.js";
 import textRule from "./textRule.js";
+import compareStyle from "./compareStyle.js";
 import rowLabel from "./rowLabel.js";
 import freeze from "./freeze.js";
 import columnWidth from "./columnWidth.js";
@@ -19,6 +20,7 @@ export const PRIMITIVES = [
   numberFormat,
   gradient,
   textRule,
+  compareStyle,
   rowLabel,
   freeze,
   columnWidth,
