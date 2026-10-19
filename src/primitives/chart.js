@@ -5,8 +5,24 @@ import { definePrimitive } from "../utils/define-primitive.js";
 //           colors:[], width, height, position:{row,col}}]. x/series address
 // columns by NAME; the compiler-independent runtime resolves them to A1 ranges.
 // Removes existing charts first so re-renders don't stack duplicates.
+//
+// For a chart inside a stacked tab (headings, sub-tables), three options:
+//   data_from_last_header: the data starts at the tab's last __header__ row
+//     (its column names are the series names) and runs to the end of the data,
+//     instead of starting at the top header row.
+//   anchor_section: place the chart at the first heading row of this __level
+//     (position.col still applies; give the level a tall row_height to make room).
+//   hide_data: hide the chart's data rows and x/series columns (the chart
+//     still plots them).
+//   options: extra chart options passed to setOption as-is, e.g.
+//     {"series": {"1": {"lineDashStyle": [4, 4]}}, "legend.position": "bottom"}.
 export default definePrimitive({
   name: "chart",
+  region: "chart",
+  inputs: function (ctx) {
+    if (!(ctx.spec.charts || []).length) return null;
+    return { c: ctx.spec.charts, h: ctx.headerRows, n: ctx.dataRowCount, rows: ctx.rows, hdr: ctx.headers, sec: ctx.sections };
+  },
   field: "charts",
   order: 80,
   validate(charts, columns) {
@@ -30,25 +46,51 @@ export default definePrimitive({
       } catch (ignore) { SpreadsheetApp.flush(); }
     }
 
-    (ctx.spec.charts || []).forEach(function (c) {
-      var headerRow = ctx.headerRows;
-      var xColumn = columnIndex_(ctx.columns, c.x);
-      if (xColumn <= 0) return;
+    var charts = ctx.spec.charts || [];
+    if (charts.some(function (c) { return c.hide_data; })) {
+      sheet.showRows(1, sheet.getMaxRows());
+      sheet.showColumns(1, sheet.getMaxColumns());
+    }
 
-      var builder = sheet.newChart().asLineChart()
-        .addRange(sheet.getRange(headerRow, xColumn, ctx.dataRowCount + 1, 1));
+    charts.forEach(function (c) {
+      var headerRow = ctx.headerRows;
+      if (c.data_from_last_header) {
+        if (!(ctx.headers || []).length) return;
+        headerRow = ctx.headers[ctx.headers.length - 1].row;
+      }
+      var height = ctx.rows - headerRow + 1;
+      var xColumn = columnIndex_(ctx.columns, c.x);
+      if (xColumn <= 0 || height < 2) return;
+
+      var cols = [xColumn];
       (c.series || []).forEach(function (name) {
         var col = columnIndex_(ctx.columns, name);
-        if (col > 0) builder.addRange(sheet.getRange(headerRow, col, ctx.dataRowCount + 1, 1));
+        if (col > 0) cols.push(col);
       });
+      var builder = sheet.newChart().asLineChart();
+      cols.forEach(function (col) { builder.addRange(sheet.getRange(headerRow, col, height, 1)); });
 
       builder.setNumHeaders(c.num_headers != null ? c.num_headers : 1);
       if (c.title) builder.setTitle(c.title);
       if (c.v_axis_format) builder.setOption("vAxis.format", c.v_axis_format);
       if (c.colors) builder.setOption("colors", c.colors);
+      Object.keys(c.options || {}).forEach(function (k) { builder.setOption(k, c.options[k]); });
       builder.setOption("width", c.width || 920).setOption("height", c.height || 400);
+
       var pos = c.position || { row: 4, col: 0 };
-      builder.setPosition(pos.row, pos.col, 0, 0);
+      var row = pos.row;
+      if (c.anchor_section) {
+        var anchor = (ctx.sections || []).filter(function (s) { return s.level === c.anchor_section; })[0];
+        if (!anchor) return;
+        row = anchor.row;
+      }
+      builder.setPosition(row, pos.col, 0, 0);
+
+      if (c.hide_data) {
+        builder.setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_BOTH);
+        sheet.hideRows(headerRow, height);
+        cols.forEach(function (col) { sheet.hideColumns(col); });
+      }
       sheet.insertChart(builder.build());
     });
   },

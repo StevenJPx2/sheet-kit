@@ -16,6 +16,7 @@ export interface Column {
 }
 
 export interface Freeze { rows?: number; cols?: number; }
+export interface Placement { position?: "first" | "last"; hidden?: boolean; }
 export interface Merge { from: string; to: string; label: string; }
 export interface NumberFormat { column: string; format: string; }
 export interface ColumnWidth { column: string; width: number; }
@@ -53,6 +54,7 @@ export interface Tab {
   row_key?: string;
   header_row?: number;
   freeze?: Freeze;
+  placement?: Placement;
   header_merges?: Merge[];
   number_formats?: NumberFormat[];
   row_label_styles?: RowLabelStyle[];
@@ -103,6 +105,7 @@ declare global {
 
   // Apps Script services (loosely typed; runtime-only).
   var SpreadsheetApp: any;
+  var Charts: any;
   var DriveApp: any;
   var Utilities: any;
   var ContentService: any;
