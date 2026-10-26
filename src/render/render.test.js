@@ -2,7 +2,7 @@
 // against an in-memory Sheets API, and parity with the Apps Script renderer
 // (the real compiled bundle run against an in-memory SpreadsheetApp).
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -21,7 +21,7 @@ const noWait = { wait: async () => {} };
 /** Compare with (or, with UPDATE_GOLDEN=1, rewrite) a JSON fixture. */
 function golden(name, actual) {
   const path = join(here, "testing", "golden", `${name}.json`);
-  if (process.env.UPDATE_GOLDEN === "1" || !existsSync(path)) {
+  if (process.env.UPDATE_GOLDEN === "1") {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, JSON.stringify(actual, null, 2) + "\n");
   }

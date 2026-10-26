@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, test } from "node:test";
@@ -183,4 +184,40 @@ test("--paste login stores the pasted credentials; logout revokes and deletes", 
   assert.match(google.revoked[0], /revoke\?token=rt-2/);
   assert.ok(!existsSync(join(dir, "token.json")));
   assert.equal(await logout(google.fetchImpl), false);
+});
+
+test("auth CLI: paste login, domain env guard, status, secret-only export and logout", () => {
+  const dir = withConfig();
+  const preload = join(dir, "fetch.mjs");
+  writeFileSync(preload, `globalThis.fetch = async (url) => {
+    if (String(url).includes("/drive/v3/about")) return Response.json({user:{emailAddress:"me@company.test"}});
+    if (String(url).startsWith("https://oauth2.googleapis.com/revoke?token=")) return Response.json({});
+    throw new Error("unexpected request: " + url);
+  };`);
+  const cli = (args, input = "", env = {}) => spawnSync(process.execPath, ["--import", preload, new URL("../cli/cli.js", import.meta.url).pathname, "auth", ...args], {
+    encoding: "utf8", input,
+    env: { ...process.env, SHEET_KIT_CONFIG_DIR: dir, SHEET_KIT_ACCESS_TOKEN: "", SHEET_KIT_REFRESH_TOKEN: "", SHEET_KIT_EXPECT_DOMAIN: "company.test", ...env },
+  });
+  const credentials = JSON.stringify({ access_token: "fake-access", refresh_token: "fake-refresh", expiry_date: Date.now() + 3_600_000 });
+  try {
+    assert.equal(cli(["status"]).status, 1);
+    const wrong = cli(["login", "--paste"], credentials, { SHEET_KIT_EXPECT_DOMAIN: "other.test" });
+    assert.equal(wrong.status, 1);
+    assert.match(wrong.stderr, /expected an @other.test account/);
+    assert.equal(existsSync(join(dir, "token.json")), false);
+    const login = cli(["login", "--paste"], credentials);
+    assert.equal(login.status, 0, login.stderr);
+    const status = cli(["status"]);
+    assert.equal(status.status, 0, status.stderr);
+    assert.match(status.stdout, /me@company.test \(config:/);
+    const exported = cli(["export-env"]);
+    assert.equal(exported.status, 0, exported.stderr);
+    assert.equal(exported.stdout, "SHEET_KIT_REFRESH_TOKEN=fake-refresh\n");
+    assert.doesNotMatch(exported.stderr, /fake-refresh|fake-access/);
+    assert.equal(cli(["logout"]).status, 0);
+    assert.equal(existsSync(join(dir, "token.json")), false);
+    assert.equal(cli(["export-env"]).status, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
