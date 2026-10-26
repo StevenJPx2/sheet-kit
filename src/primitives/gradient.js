@@ -9,6 +9,11 @@ const GRADIENT_KINDS = new Set(["number", "percent", "percentile", "min", "max"]
 // contiguous run of that column's value (e.g. Top Products by Section).
 export default definePrimitive({
   name: "gradient",
+  region: "cf",
+  inputs: function (ctx) {
+    return { g: ctx.spec.gradients || null, r: ctx.firstDataRow, n: ctx.dataRowCount,
+      runs: (ctx.spec.gradients || []).map(function (g) { return g.group_by ? gradientRuns_(ctx.values, ctx.columns, ctx.firstDataRow, ctx.dataRowCount, g.group_by) : null; }) };
+  },
   field: "gradients",
   order: 30,
   validate(gradients, columns) {

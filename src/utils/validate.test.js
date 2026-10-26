@@ -68,6 +68,16 @@ test("chart requires a series", () => {
   assert.notEqual(validate(m), "");
 });
 
+test("placement primitive owns its schema", () => {
+  const m = base();
+  m.tabs[0].placement = { position: "last", hidden: true };
+  assert.equal(validate(m), "");
+  m.tabs[0].placement = { position: "middle" };
+  assert.match(validate(m), /placement.position/);
+  m.tabs[0].placement = { hidden: "yes" };
+  assert.match(validate(m), /placement.hidden/);
+});
+
 test("duplicate tab names and data keys are rejected", () => {
   const named = base();
   named.tabs.push({ ...named.tabs[0], data_key: "other" });

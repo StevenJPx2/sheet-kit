@@ -7,6 +7,21 @@ import { definePrimitive } from "../utils/define-primitive.js";
 // separators to row_height 8).
 export default definePrimitive({
   name: "rowLabel",
+  region: "format",
+  inputs: function (ctx) {
+    // Per rule: the match bitmap over the label column. Styling depends only on
+    // WHICH rows match, never on the label text or any number.
+    var values = ctx.values, columns = ctx.columns;
+    var bits = (ctx.spec.row_label_styles || []).map(function (rule) {
+      var name = rule.match && rule.match.column;
+      var col = name ? columnIndex_(columns, name) : 1;
+      if (col <= 0) col = 1;
+      var s = "";
+      for (var i = ctx.firstDataRow - 1; i < values.length; i++) s += matchLabel_(String(values[i][col - 1] || ""), rule.match) ? "1" : "0";
+      return s;
+    });
+    return { rules: ctx.spec.row_label_styles || null, w: ctx.width, bits: bits };
+  },
   field: "row_label_styles",
   order: 50,
   validate(rules, columns) {

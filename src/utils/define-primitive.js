@@ -32,6 +32,12 @@
  * @property {number}                              [order]     Render order, lower first (default 50).
  * @property {(value:any, columns:Set<string>, tab:any)=>string} [validate]  Schema check for this field; "" when valid.
  * @property {(ctx:RenderCtx)=>void}               render      Apps Script behaviour, serialised into the bundle.
+ * @property {(ctx:RenderCtx)=>any}                [inputs]    Everything render READS other than cell values (spec
+ *   fields, dims, section rows, label-match bitmaps). Core hashes it per tab; the step re-runs only when it changes.
+ *   Omit = conservative: any layout change re-runs it. Must not touch ctx.sheet.
+ * @property {"format"|"cf"|"sheet"|"chart"}       [region]    What render writes. format = cell formats on the grid
+ *   (re-run as a group behind one clearFormat); cf = conditional-format rules (installed atomically as a group);
+ *   sheet = sheet-level props (independent); chart = embedded charts. Omit = a dirty step forces a full render.
  */
 
 /**
@@ -64,6 +70,10 @@ export function definePrimitive(spec) {
     order: spec.order ?? 50,
     fn,
     validate: spec.validate ?? (() => ""),
-    runtime: `var ${fn} = ${spec.render.toString()};`,
+    runtime: [
+      `var ${fn} = ${spec.render.toString()};`,
+      spec.inputs ? `${fn}.inputs = ${spec.inputs.toString()};` : "",
+      spec.region ? `${fn}.region = ${JSON.stringify(spec.region)};` : "",
+    ].filter(Boolean).join("\n"),
   };
 }

@@ -3,6 +3,8 @@ import { definePrimitive } from "../utils/define-primitive.js";
 // columnWidth — set pixel widths for named columns. column_widths: [{column, width}].
 export default definePrimitive({
   name: "columnWidth",
+  region: "sheet",
+  inputs: function (ctx) { return ctx.spec.column_widths || null; },
   field: "column_widths",
   order: 70,
   validate(widths, columns) {

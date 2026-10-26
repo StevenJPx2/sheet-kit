@@ -37,6 +37,7 @@ directory of per-report artifact folders; `--artifact` (publish) takes one.
     "data_key": "daily",              // selects data.json datasets[data_key]
     "header_row": 2,                  // # header rows (group header + column names)
     "freeze": { "rows": 2, "cols": 1 },
+    "placement": { "position": "last", "hidden": false },  // "first"|"last"; hidden absent = leave as is
     "columns": [
       { "name": "Date", "header": "Date", "type": "date", "source_field": "date", "bold": true },
       { "name": "RPV",  "header": "RPV",  "type": "money",
@@ -57,6 +58,9 @@ directory of per-report artifact folders; `--artifact` (publish) takes one.
   }]
 }
 ```
+
+New tabs are created at the end of the tab bar. `placement` is re-applied when
+it changes and on every full render, so a manual move or unhide sticks until then.
 
 Gradient `kind`: `number` | `percent` | `percentile` | `min` | `max`, with
 independent `min_kind`/`mid_kind`/`max_kind`. Heading rows travel in `data.json`

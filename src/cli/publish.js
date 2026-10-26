@@ -62,11 +62,15 @@ export async function stageWithRetry(src, dest, copy = copyFileSync, wait = slee
  * confirms it rendered the just-written data. Returns an error message or "".
  * @param {PublishConfig} cfg
  * @param {string} artifactDir
- * @param {string} expectedLatest
+ * @param {string | {expectedLatest?: string, force?: boolean, profile?: boolean}} options
+ *   expectedLatest (max data date) drives the staleness handshake; force skips
+ *   the webhook's incremental (values-only) render and forces a full re-style.
  * @param {(msg: string) => void} log
  * @returns {Promise<string>}
  */
-export async function publish(cfg, artifactDir, expectedLatest, log) {
+export async function publish(cfg, artifactDir, options, log) {
+  const opts = typeof options === "string" ? { expectedLatest: options } : (options ?? {});
+  const expectedLatest = opts.expectedLatest ?? "";
   let endpoint;
   try {
     endpoint = new URL(cfg.url);
@@ -74,38 +78,46 @@ export async function publish(cfg, artifactDir, expectedLatest, log) {
     return "invalid webhook config";
   }
   if (endpoint.protocol !== "https:" || !endpoint.host || !cfg.secret.trim()) return "invalid webhook config";
-  if (!cfg.driveDir) return "driveDir is required";
 
-  let datasetKey, expectedHash;
+  let datasetKey, expectedHash, raw;
   try {
-    const raw = readFileSync(join(artifactDir, "data.json"), "utf8");
+    raw = readFileSync(join(artifactDir, "data.json"), "utf8");
     const data = JSON.parse(raw);
     const keys = Object.keys(data.datasets ?? {});
     if (keys.length !== 1) return `publish requires exactly one dataset (found ${keys.length})`;
     datasetKey = keys[0].replace(/[^A-Za-z0-9._-]/g, "_");
-    // Content hash of the exact bytes we stage: the webhook renders only once the
-    // Drive file it reads hashes to this, so a same-date content revision is no
-    // longer masked by the max-date handshake + Drive sync lag.
+    // Content hash of the exact bytes: with Drive staging the webhook renders only
+    // once the file it reads hashes to this (Drive sync lag); with inline data it
+    // is informational.
     expectedHash = createHash("sha256").update(raw).digest("hex");
   } catch (e) {
     return `read data.json: ${String(e)}`;
   }
 
+  // Transport: the bytes go INLINE in the POST (≤ tens of KB; Apps Script accepts
+  // MBs) — no cloud-sync wait. When driveDir is configured we ALSO stage the file
+  // so a webhook that predates dataInline still renders via the Drive path.
   const dataName = `data.${datasetKey}.json`;
-  const destination = join(expandHome(cfg.driveDir), dataName);
-  mkdirSync(dirname(destination), { recursive: true });
-  try {
-    await stageWithRetry(join(artifactDir, "data.json"), destination);
-  } catch (error) {
-    return `stage data.json to Drive: ${String(error)}`;
+  if (cfg.driveDir) {
+    const destination = join(expandHome(cfg.driveDir), dataName);
+    mkdirSync(dirname(destination), { recursive: true });
+    try {
+      await stageWithRetry(join(artifactDir, "data.json"), destination);
+    } catch (error) {
+      return `stage data.json to Drive: ${String(error)}`;
+    }
   }
 
   const body = JSON.stringify({
     token: cfg.secret.trim(),
     data: dataName,
+    dataInline: raw,
     expectedLatest,
     expectedHash,
+    force: Boolean(opts.force),
+    profile: Boolean(opts.profile),
   });
+
 
   const deadline = Date.now() + 5 * 60_000;
   let transientRetries = 0;
@@ -122,16 +134,25 @@ export async function publish(cfg, artifactDir, expectedLatest, log) {
     } catch {
       // Apps Script intermittently serves an HTML error page ("<!DOCTYPE …")
       // instead of JSON; treat it as transient and retry.
-      if (transientRetries < 3) {
+      // Apps Script's HTML error page is a momentary blip (busy / cold start),
+      // not a state that needs 10s to clear: back off briefly, try more often.
+      if (transientRetries < 5) {
         transientRetries++;
-        log(`non-JSON webhook response (HTTP ${resp.status}); retry ${transientRetries}/3 in 10s`);
-        await sleep(10_000);
+        log(`non-JSON webhook response (HTTP ${resp.status}); retry ${transientRetries}/5 in 2s`);
+        await sleep(2_000);
         continue;
       }
       return `webhook returned non-JSON after ${transientRetries} retries (HTTP ${resp.status})`;
     }
 
-    if (result.ok) return "";
+    if (result.ok) {
+      const modes = (result.tabs ?? []).map((t) => `${t.sheet}:${t.mode ?? "full"}${t.ran?.length ? `[${t.ran.map((n) => n.replace(/^sk_|_$/g, "")).join("+")}]` : ""}`);
+      if (modes.length) log(`rendered ${modes.join(", ")}`);
+      for (const t of result.tabs ?? []) {
+        if (t.timings) log(`timings ${t.sheet} ${JSON.stringify(t.timings)}`);
+      }
+      return "";
+    }
     if (result.stale) {
       if (Date.now() > deadline) return `sheet still stale after retries (Drive not synced; latest=${result.latest})`;
       log(`artifact not synced to Drive yet (latest=${result.latest}); retrying in 15s`);

@@ -6,10 +6,12 @@
  * artifact, and renders every tab through renderTab (runtime/core.js). No
  * per-report functions — a new sheet needs no webhook change.
  *
- * POST { token, manifest?, data?, expectedLatest?, action? }
+ * POST { token, manifest?, data?, expectedLatest?, expectedHash?, force?, action? }
  *   token          — sha256 must match Script Property SHEETKIT_SECRET_HASH
  *   action=inspect — return spreadsheet structure (+ cells) instead of rendering
  *   expectedLatest — staleness handshake: reject if the data is older
+ *   force          — skip the incremental (values-only) path; full re-render
+ *   profile        — return per-primitive render timings (adds flush latency)
  */
 
 function doPost(event) {
@@ -28,35 +30,42 @@ function doPost(event) {
       return jsonResponse_({ ok: true, spreadsheet: inspectSpreadsheet_(inspectId, payload) });
     }
 
-    var raw = readRawByName_(String(payload.data || 'data.json'));
+    // Data transport. Preferred: the artifact bytes inline in the POST body
+    // (dataInline) — no Drive staging, no cloud-sync wait, and the staleness
+    // handshake is moot because we render exactly the bytes we were sent.
+    // Fallback: read a staged file from Drive by name (legacy callers).
+    var inline = payload.dataInline != null;
+    var raw = inline ? String(payload.dataInline) : readRawByName_(String(payload.data || 'data.json'));
     var data = JSON.parse(raw);
 
     if (manifest.contract_version !== 1 || data.contract_version !== 1) {
       return jsonResponse_({ ok: false, error: 'unsupported contract_version' });
     }
 
-    // Staleness handshake. Prefer a content hash: the CLI sends the sha256 of the
-    // exact bytes it staged, so we only render once Drive has synced that precise
-    // file — even when the content changed but the max date did not. Fall back to
-    // the max-date check for callers that don't send a hash.
-    var expectedDataHash = String(payload.expectedHash || '');
-    if (expectedDataHash) {
-      if (sha256_(raw) !== expectedDataHash) {
-        return jsonResponse_({ ok: false, stale: true, latest: dataLatestDate_(data), reason: 'hash' });
-      }
-    } else {
-      var expectedLatest = String(payload.expectedLatest || '');
-      if (expectedLatest && dataLatestDate_(data) < expectedLatest) {
-        return jsonResponse_({ ok: false, stale: true, latest: dataLatestDate_(data) });
+    if (!inline) {
+      // Staleness handshake for the Drive path. Prefer a content hash: the CLI
+      // sends the sha256 of the exact bytes it staged, so we only render once
+      // Drive has synced that precise file. Fall back to the max-date check.
+      var expectedDataHash = String(payload.expectedHash || '');
+      if (expectedDataHash) {
+        if (sha256_(raw) !== expectedDataHash) {
+          return jsonResponse_({ ok: false, stale: true, latest: dataLatestDate_(data), reason: 'hash' });
+        }
+      } else {
+        var expectedLatest = String(payload.expectedLatest || '');
+        if (expectedLatest && dataLatestDate_(data) < expectedLatest) {
+          return jsonResponse_({ ok: false, stale: true, latest: dataLatestDate_(data) });
+        }
       }
     }
 
     var ss = SpreadsheetApp.openById(manifest.spreadsheet_id);
+    var renderOptions = { force: Boolean(payload.force), profile: Boolean(payload.profile) };
     var rendered = [];
     manifest.tabs.forEach(function (spec) {
       if (!Object.prototype.hasOwnProperty.call(data.datasets || {}, spec.data_key)) return;
       var rows = data.datasets[spec.data_key] || [];
-      rendered.push(renderTab(ss, spec, rows));
+      rendered.push(renderTab(ss, spec, rows, renderOptions));
     });
 
     return jsonResponse_({ ok: true, tabs: rendered });
@@ -87,6 +96,7 @@ function inspectSpreadsheet_(spreadsheetId, payload) {
     var result = {
       name: sheet.getName(),
       id: sheet.getSheetId(),
+      hidden: sheet.isSheetHidden(),
       rows: sheet.getLastRow(),
       columns: sheet.getLastColumn(),
       frozen_rows: sheet.getFrozenRows(),

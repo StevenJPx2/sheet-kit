@@ -4,6 +4,8 @@ import { definePrimitive } from "../utils/define-primitive.js";
 // a column's data rows.
 export default definePrimitive({
   name: "numberFormat",
+  region: "format",
+  inputs: function (ctx) { return { f: ctx.spec.number_formats || null, r: ctx.firstDataRow, n: ctx.dataRowCount }; },
   field: "number_formats",
   order: 20,
   validate(formats, columns) {

@@ -108,3 +108,77 @@ test("matchLabel_ handles empty/prefix/equals", () => {
   assert.ok(sandbox.matchLabel_("July cumulative", { suffix: "cumulative" }));
   assert.ok(!sandbox.matchLabel_("July cumulative", { empty: true }));
 });
+
+test("layoutSignature_ ignores cell numbers but tracks everything styling reads", () => {
+  const spec = {
+    header_row: 1,
+    columns: [
+      { name: "Date", header: "Date", source_field: "date" },
+      { name: "Status", header: "", source_field: "status" },
+      { name: "RPV", header: "RPV", source_field: "rpv" },
+    ],
+    row_label_styles: [
+      { match: { column: "Date", suffix: "cumulative" }, style: { bold: true, background: "#d9eaf7" } },
+      { match: { column: "Status", equals: "🟢" }, style: { background: "#e6f4ea" } },
+    ],
+    gradients: [{ column: "RPV", kind: "percentile", group_by: "Date" }],
+  };
+  const sig = (rows) => {
+    const built = sandbox.buildGrid_(spec, rows);
+    return sandbox.layoutSignature_(spec, sandbox.normalizeWidth_(built.values), built, 1);
+  };
+  const base = [
+    { __section__: "Block", __level: "block" },
+    { date: "Rolling 7 days (Sep 10 - Sep 16) cumulative", status: "🟢", rpv: 4.1 },
+    { date: "2026-09-16", status: "🟢", rpv: 2.36 },
+  ];
+  // Numbers change, label text changes (still matches "cumulative") → SAME layout.
+  const sameLayout = [
+    { __section__: "Block", __level: "block" },
+    { date: "Rolling 7 days (Sep 11 - Sep 17) cumulative", status: "🟢", rpv: 9.9 },
+    { date: "2026-09-17", status: "🟢", rpv: 0 },
+  ];
+  assert.equal(sig(base), sig(sameLayout));
+
+  // A status light flips → rowLabel match bitmap differs → DIFFERENT.
+  const flipped = JSON.parse(JSON.stringify(base));
+  flipped[2].status = "🔴";
+  assert.notEqual(sig(base), sig(flipped));
+
+  // A row is added → dimensions differ → DIFFERENT.
+  assert.notEqual(sig(base), sig(base.concat([{ date: "2026-09-15", status: "🟢", rpv: 1 }])));
+
+  // A section heading moves/changes level → DIFFERENT.
+  const moved = JSON.parse(JSON.stringify(base));
+  moved[0].__level = "note";
+  assert.notEqual(sig(base), sig(moved));
+
+  // Gradient group_by run boundaries change (same row count) → DIFFERENT.
+  const regrouped = JSON.parse(JSON.stringify(base));
+  regrouped[2].date = regrouped[1].date; // both rows now one run
+  assert.notEqual(sig(base), sig(regrouped));
+});
+
+test("diffState_ picks values / partial / full from the per-step state", () => {
+  const regionOf = (n) => ({ sk_rowLabel_: "format", sk_gradient_: "cf", sk_freeze_: "sheet", sk_mystery_: null })[n];
+  const base = { v: 2, rows: 10, width: 5, headerRows: 1, steps: { sk_rowLabel_: "a", sk_gradient_: "b", sk_freeze_: "c" } };
+  const same = JSON.parse(JSON.stringify(base));
+  assert.equal(sandbox.diffState_(base, same, regionOf).mode, "values");
+  // no previous state → full
+  assert.equal(sandbox.diffState_(null, base, regionOf).mode, "full");
+  // width or header rows changed → full (column positions shift)
+  assert.equal(sandbox.diffState_(base, { ...same, width: 6 }, regionOf).mode, "full");
+  assert.equal(sandbox.diffState_(base, { ...same, headerRows: 2 }, regionOf).mode, "full");
+  // one format step dirty → partial, only the format region
+  const flip = JSON.parse(JSON.stringify(base)); flip.steps.sk_rowLabel_ = "z";
+  const plan = sandbox.diffState_(base, flip, regionOf);
+  assert.equal(plan.mode, "partial");
+  assert.equal(JSON.stringify(plan.regions), JSON.stringify({ format: true }));
+  assert.equal(JSON.stringify(plan.dirty), JSON.stringify(["sk_rowLabel_"]));
+  // row count changed but no step dirty → partial (content of vanished rows must be cleared)
+  assert.equal(sandbox.diffState_(base, { ...same, rows: 9 }, regionOf).mode, "partial");
+  // a dirty step with no declared region → full (unknown footprint)
+  const odd = JSON.parse(JSON.stringify(base)); odd.steps.sk_mystery_ = "q";
+  const prevOdd = JSON.parse(JSON.stringify(base)); prevOdd.steps.sk_mystery_ = "p";
+  assert.equal(sandbox.diffState_(prevOdd, odd, regionOf).mode, "full");
+});

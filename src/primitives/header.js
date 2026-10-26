@@ -5,6 +5,8 @@ import { definePrimitive } from "../utils/define-primitive.js";
 // 1), and bolds any column flagged bold.
 export default definePrimitive({
   name: "header",
+  region: "format",
+  inputs: function (ctx) { return { h: ctx.headerRows, w: ctx.width, n: ctx.dataRowCount, bold: ctx.columns.map(function (c) { return !!c.bold; }), merges: ctx.spec.header_merges || null }; },
   field: null,
   order: 10,
   validate(tab, columns) {

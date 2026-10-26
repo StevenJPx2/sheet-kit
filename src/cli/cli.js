@@ -4,7 +4,7 @@
 //   sheet-kit validate --manifest manifest.json [--data data.json]
 //   sheet-kit compile  --artifacts DIR --out DIR [--timezone TZ]
 //   sheet-kit deploy   --project DIR [--script-id ID] [--deployment-id ID]
-//   sheet-kit publish  --artifact DIR --config webhook.json [--expected-latest DATE]
+//   sheet-kit publish  --artifact DIR --config webhook.json [--expected-latest DATE] [--full] [--profile]
 //   sheet-kit inspect  --config webhook.json [--spreadsheet-id ID] [--sheet NAME] [--range A1] [--cells]
 //   sheet-kit version
 import { readFileSync } from "node:fs";
@@ -113,7 +113,8 @@ async function cmdPublish(args) {
   if (cErr) { process.stderr.write(`coverage: ${cErr}\n`); return 1; }
 
   const cfg = loadPublishConfig(f.config);
-  const err = await publish(cfg, f.artifact, f["expected-latest"] ?? "", (msg) => process.stderr.write(msg + "\n"));
+  const opts = { expectedLatest: f["expected-latest"] ?? "", force: f.full === "true", profile: f.profile === "true" };
+  const err = await publish(cfg, f.artifact, opts, (msg) => process.stderr.write(msg + "\n"));
   if (err) { process.stderr.write(`publish: ${err}\n`); return 1; }
   process.stdout.write(`published ${m.tabs.length} tab(s)\n`);
   return 0;

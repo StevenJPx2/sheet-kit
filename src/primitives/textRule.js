@@ -5,6 +5,8 @@ import { definePrimitive } from "../utils/define-primitive.js";
 // them together with any gradient rules.
 export default definePrimitive({
   name: "textRule",
+  region: "cf",
+  inputs: function (ctx) { return { t: ctx.spec.text_rules || null, rows: ctx.rows, w: ctx.width }; },
   field: "text_rules",
   order: 40,
   render: function (ctx) {

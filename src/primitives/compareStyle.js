@@ -11,6 +11,8 @@ const STYLE_KEYS = new Set(["bold", "italic", "underline", "strikethrough", "fon
 
 export default definePrimitive({
   name: "compareStyle",
+  region: "cf",
+  inputs: function (ctx) { return { c: ctx.spec.compare_style || null, r: ctx.firstDataRow, n: ctx.dataRowCount }; },
   field: "compare_style",
   order: 41,
   validate(pairs, columns) {

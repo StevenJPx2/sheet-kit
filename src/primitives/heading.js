@@ -15,6 +15,8 @@ import { definePrimitive } from "../utils/define-primitive.js";
 // them. Positions come from data; styles come from the manifest.
 export default definePrimitive({
   name: "heading",
+  region: "format",
+  inputs: function (ctx) { return { styles: ctx.spec.headings || null, w: ctx.width, sections: ctx.sections, headers: ctx.headers }; },
   field: "headings",
   order: 15,
   render: function (ctx) {

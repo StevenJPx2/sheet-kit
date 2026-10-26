@@ -12,6 +12,7 @@ import rowLabel from "./rowLabel.js";
 import freeze from "./freeze.js";
 import columnWidth from "./columnWidth.js";
 import chart from "./chart.js";
+import placement from "./placement.js";
 
 /** @type {import("../utils/define-primitive.js").Primitive[]} */
 export const PRIMITIVES = [
@@ -25,6 +26,7 @@ export const PRIMITIVES = [
   freeze,
   columnWidth,
   chart,
+  placement,
 ];
 
 const names = new Set();
