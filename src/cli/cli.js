@@ -6,9 +6,12 @@
 //   sheet-kit deploy   --project DIR [--script-id ID] [--deployment-id ID]
 //   sheet-kit publish  --artifact DIR --config webhook.json [--expected-latest DATE] [--full] [--profile]
 //   sheet-kit inspect  --config webhook.json [--spreadsheet-id ID] [--sheet NAME] [--range A1] [--cells]
+//   sheet-kit auth     login [--client client_secret.json] [--account EMAIL] [--expect-domain D] [--no-browser] | status | logout
 //   sheet-kit version
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { configDir, getAccessToken, loadToken, login, logout, whoami } from "../google/auth.js";
 import { compileAppsScript } from "../utils/compiler.js";
 import { deployAppsScript } from "./deploy.js";
 import { CONTRACT_VERSION, validate } from "../utils/validate.js";
@@ -141,6 +144,51 @@ async function cmdInspect(args) {
   }
 }
 
+/** @param {string} url */
+function openBrowser(url) {
+  const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
+  spawn(cmd, [url], { stdio: "ignore", detached: true }).on("error", () => {}).unref();
+}
+
+/** @param {string[]} args */
+async function cmdAuth(args) {
+  const [sub, ...rest] = args;
+  const f = flags(rest);
+  try {
+    switch (sub) {
+      case "login": {
+        const email = await login({
+          client: f.client,
+          account: f.account,
+          expectDomain: f["expect-domain"],
+          openUrl: f["no-browser"] === "true" ? undefined : openBrowser,
+          log: (msg) => process.stderr.write(msg + "\n"),
+        });
+        process.stdout.write(`signed in as ${email}\n`);
+        return 0;
+      }
+      case "status": {
+        if (process.env.SHEET_KIT_ACCESS_TOKEN) {
+          process.stdout.write(`${await whoami(process.env.SHEET_KIT_ACCESS_TOKEN)} (from SHEET_KIT_ACCESS_TOKEN)\n`);
+          return 0;
+        }
+        if (!loadToken()) { process.stdout.write(`not signed in (config: ${configDir()})\n`); return 1; }
+        process.stdout.write(`${await whoami(await getAccessToken())} (config: ${configDir()})\n`);
+        return 0;
+      }
+      case "logout":
+        process.stdout.write((await logout()) ? "signed out\n" : "not signed in\n");
+        return 0;
+      default:
+        process.stderr.write("usage: sheet-kit auth <login|status|logout>\n");
+        return 2;
+    }
+  } catch (error) {
+    process.stderr.write(`auth: ${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const cmd = argv[0];
@@ -151,9 +199,10 @@ async function main() {
     case "deploy": return cmdDeploy(argv.slice(1));
     case "publish": return await cmdPublish(argv.slice(1));
     case "inspect": return await cmdInspect(argv.slice(1));
+    case "auth": return await cmdAuth(argv.slice(1));
     case "skills": return cmdSkills(argv.slice(1));
     default:
-      process.stderr.write("usage: sheet-kit <validate|compile|deploy|publish|inspect|skills|version> [flags]\n");
+      process.stderr.write("usage: sheet-kit <validate|compile|deploy|publish|inspect|auth|skills|version> [flags]\n");
       return 2;
   }
 }
