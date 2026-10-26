@@ -5,13 +5,14 @@
 //   sheet-kit compile  --artifacts DIR --out DIR [--timezone TZ]
 //   sheet-kit deploy   --project DIR [--script-id ID] [--deployment-id ID] [--description D] [--expect-domain D]
 //   sheet-kit publish  --artifact DIR --config webhook.json [--expected-latest DATE] [--full] [--profile]
-//   sheet-kit inspect  --config webhook.json [--spreadsheet-id ID] [--sheet NAME] [--range A1] [--cells]
+//   sheet-kit inspect  --spreadsheet-id ID | --config webhook.json  [--sheet NAME] [--range A1] [--cells]
 //   sheet-kit auth     login [--client client_secret.json] [--account EMAIL] [--expect-domain D] [--no-browser] | status | logout
 //   sheet-kit version
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { checkDomain, configDir, getAccessToken, loadToken, login, logout, whoami } from "../google/auth.js";
+import { checkDomain, configDir, getAccessToken, isSignedIn, loadToken, login, logout, whoami } from "../google/auth.js";
+import { inspectViaSheetsApi } from "./inspect.js";
 import { compileAppsScript } from "../utils/compiler.js";
 import { deployAppsScript } from "./deploy.js";
 import { CONTRACT_VERSION, validate } from "../utils/validate.js";
@@ -129,20 +130,26 @@ async function cmdPublish(args) {
   return 0;
 }
 
-/** @param {string[]} args */
+/**
+ * Sheets API when there is a spreadsheet id and a sign-in; otherwise the
+ * deployed webhook (--config), which defaults to the manifest's spreadsheet.
+ * @param {string[]} args
+ */
 async function cmdInspect(args) {
   const f = flags(args);
-  if (!f.config) { process.stderr.write("--config is required\n"); return 2; }
+  const spreadsheetId = f["spreadsheet-id"] ?? "";
+  const viaApi = Boolean(spreadsheetId) && isSignedIn();
+  if (!viaApi && !f.config) {
+    process.stderr.write("--spreadsheet-id (signed in via `sheet-kit auth login`) or --config is required\n");
+    return 2;
+  }
 
+  const opts = { sheet: f.sheet ?? "", range: f.range ?? "", cells: f.cells === "true" };
   try {
-    const result = await requestWebhook(loadPublishConfig(f.config), {
-      action: "inspect",
-      spreadsheetId: f["spreadsheet-id"] ?? "",
-      sheet: f.sheet ?? "",
-      range: f.range ?? "",
-      cells: f.cells === "true",
-    });
-    process.stdout.write(JSON.stringify(result.spreadsheet, null, 2) + "\n");
+    const spreadsheet = viaApi
+      ? await inspectViaSheetsApi(await getAccessToken(), { spreadsheetId, ...opts })
+      : (await requestWebhook(loadPublishConfig(f.config), { action: "inspect", spreadsheetId, ...opts })).spreadsheet;
+    process.stdout.write(JSON.stringify(spreadsheet, null, 2) + "\n");
     return 0;
   } catch (error) {
     process.stderr.write(`inspect: ${String(error)}\n`);
