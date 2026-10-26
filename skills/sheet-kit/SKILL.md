@@ -1,6 +1,6 @@
 ---
 name: sheet-kit
-description: Render Google Sheets from a manifest + data with the `sheet-kit` CLI — validate, compile and deploy the Apps Script renderer, publish data, and inspect live sheets. Use when writing a sheet-kit manifest (columns, formulas, gradients, headings), wiring the webhook/Apps Script, or when a published sheet renders stale or wrong structure.
+description: Render Google Sheets from manifest + data with sheet-kit through the Sheets API. Sign in, validate, publish, inspect and compare sheets; also supports deprecated compile/deploy/webhook workflows.
 allowed-tools: Bash(sheet-kit:*)
 hidden: true
 ---
