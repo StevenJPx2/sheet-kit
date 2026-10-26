@@ -7,6 +7,7 @@
 //   sheet-kit publish  --artifact DIR [--expected-latest DATE] [--full]        (Sheets API, signed in)
 //   sheet-kit publish  --artifact DIR --config webhook.json [...] [--profile]  (deprecated webhook; SHEET_KIT_TRANSPORT=api overrides)
 //   sheet-kit inspect  --spreadsheet-id ID | --config webhook.json  [--sheet NAME] [--range A1] [--cells]
+//   sheet-kit compare  --spreadsheet-id ID --against ID [--sheet NAME]
 //   sheet-kit auth     login [--account EMAIL] [--expect-domain D] [--no-browser] [--paste] | status | export-env | logout
 //   sheet-kit version
 import { spawn } from "node:child_process";
@@ -14,6 +15,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { configDir, credentialSource, getAccessToken, isSignedIn, loadToken, login, loginWithPaste, logout, whoami } from "../google/auth.js";
 import { inspectViaSheetsApi } from "./inspect.js";
+import { compareViaSheetsApi } from "./compare.js";
 import { compileAppsScript } from "../utils/compiler.js";
 import { deployAppsScript } from "./deploy.js";
 import { CONTRACT_VERSION, validate } from "../utils/validate.js";
@@ -156,6 +158,23 @@ async function cmdInspect(args) {
   }
 }
 
+/** @param {string[]} args */
+async function cmdCompare(args) {
+  const f = flags(args);
+  if (!f["spreadsheet-id"] || !f.against) {
+    process.stderr.write("--spreadsheet-id and --against are required\n");
+    return 2;
+  }
+  try {
+    const result = await compareViaSheetsApi(await getAccessToken(), { spreadsheetId: f["spreadsheet-id"], against: f.against, sheet: f.sheet });
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+    return result.identical ? 0 : 1;
+  } catch (error) {
+    process.stderr.write(`compare: ${String(error)}\n`);
+    return 1;
+  }
+}
+
 /** @param {string} url */
 function openBrowser(url) {
   const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
@@ -222,10 +241,11 @@ async function main() {
     case "deploy": return cmdDeploy(argv.slice(1));
     case "publish": return await cmdPublish(argv.slice(1));
     case "inspect": return await cmdInspect(argv.slice(1));
+    case "compare": return await cmdCompare(argv.slice(1));
     case "auth": return await cmdAuth(argv.slice(1));
     case "skills": return cmdSkills(argv.slice(1));
     default:
-      process.stderr.write("usage: sheet-kit <validate|compile|deploy|publish|inspect|auth|skills|version> [flags]\n");
+      process.stderr.write("usage: sheet-kit <validate|compile|deploy|publish|inspect|compare|auth|skills|version> [flags]\n");
       return 2;
   }
 }

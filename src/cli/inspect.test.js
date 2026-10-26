@@ -101,6 +101,9 @@ test("A1 helpers", () => {
   assert.equal(a1(parseA1("A:C", 1000, 26)), "A:C");
   assert.equal(a1(parseA1("2:5", 1000, 26)), "2:5");
   assert.throws(() => parseA1("nonsense!", 10, 10), /invalid A1 range/);
+  for (const invalid of ["A0", "B2:A1", "A11", "A1:Z1", "A1:B", "1:B2"]) {
+    assert.throws(() => parseA1(invalid, 10, 10), /invalid A1 range/);
+  }
 });
 
 test("inspectViaSheetsApi sends one spreadsheets.get with the field mask and sheet range", async () => {

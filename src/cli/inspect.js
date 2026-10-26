@@ -197,13 +197,18 @@ export function parseA1(range, gridRows, gridCols) {
   const b = cell.exec(to);
   if (!a || !b || (!a[1] && !a[2]) || (!b[1] && !b[2])) throw new Error(`invalid A1 range: ${range}`);
   const form = !a[2] && !b[2] ? "columns" : !a[1] && !b[1] ? "rows" : undefined;
-  return {
+  /** @type {Bounds} */
+  const bounds = {
     r0: a[2] ? Number(a[2]) - 1 : 0,
     r1: b[2] ? Number(b[2]) : gridRows,
     c0: a[1] ? columnIndex(a[1]) : 0,
     c1: b[1] ? columnIndex(b[1]) + 1 : gridCols,
     form,
   };
+  if (Boolean(a[1]) !== Boolean(b[1]) || Boolean(a[2]) !== Boolean(b[2])
+    || bounds.r0 < 0 || bounds.c0 < 0 || bounds.r1 <= bounds.r0 || bounds.c1 <= bounds.c0
+    || bounds.r1 > gridRows || bounds.c1 > gridCols) throw new Error(`invalid A1 range: ${range}`);
+  return bounds;
 }
 
 /** Sheets API Color → "#rrggbb"; absent means the default white. @param {any} rgb */
