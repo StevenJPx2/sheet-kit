@@ -1,0 +1,17 @@
+{
+  "body": [
+    "Everything is **compiled**: there is no hand-written Apps Script. `sheet-kit compile` builds the project from a manifest and includes **only the primitives that manifest uses**.",
+    "Each feature (gradients, charts, freeze panes and so on) is **one module** with its manifest field, its validation and its render behaviour, so adding one touches nothing else.",
+    "Covers the whole Sheets layer: **validation**, **compile**, **deploy** (with clasp), **publish** through a webhook, and **inspect** for reading cells, formulas and formats back.",
+    "Plain **Node** JavaScript with JSDoc types and no build step."
+  ],
+  "areas": [
+    "developer-tools",
+    "infrastructure-data"
+  ],
+  "technologies": {
+    "add": [
+      "google-apps-script"
+    ]
+  }
+}
