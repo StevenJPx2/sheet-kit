@@ -4,7 +4,8 @@
 //   sheet-kit validate --manifest manifest.json [--data data.json]
 //   sheet-kit compile  --artifacts DIR --out DIR [--timezone TZ]
 //   sheet-kit deploy   --project DIR [--script-id ID] [--deployment-id ID]
-//   sheet-kit publish  --artifact DIR --config webhook.json [--expected-latest DATE] [--full] [--profile]
+//   sheet-kit publish  --artifact DIR [--expected-latest DATE] [--full]        (Sheets API, signed in)
+//   sheet-kit publish  --artifact DIR --config webhook.json [...] [--profile]  (deprecated webhook; SHEET_KIT_TRANSPORT=api overrides)
 //   sheet-kit inspect  --spreadsheet-id ID | --config webhook.json  [--sheet NAME] [--range A1] [--cells]
 //   sheet-kit auth     login [--account EMAIL] [--expect-domain D] [--no-browser] [--paste] | status | export-env | logout
 //   sheet-kit version
@@ -104,7 +105,7 @@ function cmdDeploy(args) {
 /** @param {string[]} args */
 async function cmdPublish(args) {
   const f = flags(args);
-  if (!f.artifact || !f.config) { process.stderr.write("--artifact and --config are required\n"); return 2; }
+  if (!f.artifact) { process.stderr.write("--artifact is required\n"); return 2; }
 
   let m;
   try { m = readJson(join(f.artifact, "manifest.json")); } catch (e) { process.stderr.write(`manifest: ${String(e)}\n`); return 1; }
@@ -113,12 +114,16 @@ async function cmdPublish(args) {
 
   let d;
   try { d = readJson(join(f.artifact, "data.json")); } catch (e) { process.stderr.write(`data: ${String(e)}\n`); return 1; }
+  const dErr = validateData(d);
+  if (dErr) { process.stderr.write(`data: ${dErr}\n`); return 1; }
   const cErr = checkCoverage(m, d);
   if (cErr) { process.stderr.write(`coverage: ${cErr}\n`); return 1; }
 
-  const cfg = loadPublishConfig(f.config);
-  const opts = { expectedLatest: f["expected-latest"] ?? "", force: f.full === "true", profile: f.profile === "true" };
-  const err = await publish(cfg, f.artifact, opts, (msg) => process.stderr.write(msg + "\n"));
+  const err = await publish(
+    { manifest: m, data: d, artifactDir: f.artifact },
+    { config: f.config, expectedLatest: f["expected-latest"], full: f.full === "true", profile: f.profile === "true" },
+    (msg) => process.stderr.write(msg + "\n"),
+  );
   if (err) { process.stderr.write(`publish: ${err}\n`); return 1; }
   process.stdout.write(`published ${m.tabs.length} tab(s)\n`);
   return 0;
