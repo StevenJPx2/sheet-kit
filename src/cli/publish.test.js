@@ -75,7 +75,7 @@ test("publish CLI reads both files and writes directly without compile or deploy
     const calls = result.stderr.split("\n").filter((l) => l.startsWith("CALL "));
     assert.equal(calls.length, 4);
     const values = calls.find((l) => l.includes("/values:batchUpdate"));
-    assert.deepEqual(JSON.parse(values.replace(/^CALL \S+ /, "")).data[0].values, [["Date", "V"], ["2026-09-14", 1]]);
+    assert.deepEqual(JSON.parse(values.replace(/^CALL \S+ /, "")).data[0].values, [["'Date", "'V"], ["'2026-09-14", 1]]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -231,6 +231,8 @@ function writeValues(book, body) {
     vr.values.forEach((/** @type {unknown[]} */ line, r) => {
       if (row + r >= s.rowCount) throw new Error("values beyond the grid");
       line.forEach((v, c) => {
+        // USER_ENTERED's leading apostrophe is an input marker, not cell text.
+        if (typeof v === "string" && v.startsWith("'")) v = v.slice(1);
         const key = `${row + r},${c}`;
         if (!s.cells.has(key)) s.cells.set(key, { format: {} });
         const cell = s.cells.get(key);

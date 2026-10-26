@@ -30,3 +30,14 @@ Use `fetchImpl` and `wait` seams in tests. The login callback expires after five
 minutes and closes its server; a wrong-domain login is revoked, not stored.
 Only Drive scope is requested. Credential priority and environment options are
 documented in the root README. No Google client secret is held here.
+
+`writeValues` uses `USER_ENTERED` for formulas, but prefixes non-formula strings
+with an apostrophe input marker. Google removes that marker and stores the
+literal text, preventing signed money/percentages, dates or numeric-looking
+labels from being reinterpreted. Strings beginning `=` are deliberate formulas;
+numbers and booleans retain their types. See Google's
+[ValueInputOption](https://developers.google.com/workspace/sheets/api/reference/rest/v4/ValueInputOption)
+and [ExtendedValue](https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/other#ExtendedValue)
+references for the UI-input parsing contract. Live verification on 2026-10-26
+confirmed signed display text remained literal and generated formulas still
+calculated across the eight Hanna Andersson report tabs.

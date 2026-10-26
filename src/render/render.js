@@ -8,9 +8,9 @@
 //   4. values.batchUpdate         every tab's grid, USER_ENTERED
 //   5. batchUpdate  "style"       each used primitive's requests(ctx), then the cf rules in order
 //
-// The reset must precede the values (string columns are text-formatted first so
-// "$2.38" isn't parsed into 2.38) and the style must follow them (auto-resized
-// rows measure the written text), hence two batchUpdates. Writes over ~1.5 MB
+// Reset establishes declared text formats; the client quotes literal strings
+// independently of formatting. Style must follow values (auto-resized rows
+// measure written text), hence two batchUpdates. Writes over ~1.5 MB
 // are split into several calls.
 import { buildGrid_, normalizeWidth_, preserveValues_ } from "./grid.js";
 import { usedPrimitives } from "../primitives/index.js";
@@ -159,8 +159,8 @@ function planTab(spec, rows, { state, sheetId, sheetCount, used, oldGrid }) {
 /**
  * A fresh tab, or an existing one wiped back to
  * values-free, format-free, unmerged, unfrozen, 21px rows and no conditional
- * formats. String columns are then text-formatted so their display text
- * survives the USER_ENTERED write.
+ * formats. String columns receive the manifest's text format; literal input
+ * escaping is handled independently by the client.
  * @param {import("../types.js").Tab} spec
  * @param {SheetState | null} state
  * @param {import("../utils/define-primitive.js").ApiCtx} ctx

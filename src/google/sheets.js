@@ -36,7 +36,8 @@ export function sheetsClient(spreadsheetId, token, deps = {}) {
     },
     /** @param {ValueRange[]} data */
     async writeValues(data) {
-      for (const chunk of chunkBySize(data.flatMap(splitValueRange))) {
+      const entered = data.map((vr) => ({ ...vr, values: vr.values.map((row) => row.map(userEnteredCell)) }));
+      for (const chunk of chunkBySize(entered.flatMap(splitValueRange))) {
         await call("POST", `${base}/values:batchUpdate`, { valueInputOption: "USER_ENTERED", data: chunk });
       }
     },
@@ -56,6 +57,16 @@ export function sheetsClient(spreadsheetId, token, deps = {}) {
 /** 'Tab name' quoted for A1 notation. @param {string} title */
 export function quoteSheet(title) {
   return `'${title.replace(/'/g, "''")}'`;
+}
+
+/**
+ * USER_ENTERED parses strings like UI input, even in text-formatted cells:
+ * "+$6,527" becomes a formula. Quote literals, leaving deliberate '=' formulas
+ * executable. Google removes the quote marker; existing quotes stay literal.
+ * @param {unknown} value
+ */
+function userEnteredCell(value) {
+  return typeof value === "string" && value !== "" && !value.startsWith("=") ? `'${value}` : value;
 }
 
 /**

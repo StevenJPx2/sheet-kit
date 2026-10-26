@@ -19,8 +19,9 @@ flowchart LR
   Values --> Style[Style batchUpdate]
 ```
 
-- Reset must precede values so string columns are text-formatted before Google
-  parses them. Style follows values so row resizing measures the written text.
+- Reset establishes the declared text formats before values. The client escapes
+  literal strings so USER_ENTERED cannot parse signed display text as formulas.
+  Style follows values so row resizing measures the written text.
 - Writes replace values/formats/merges and conditional rules on rendered tabs.
   Chart steps replace existing charts. Other tabs are not deleted.
 - The client in `../google/sheets.js` chunks writes; `../google/http.js` owns
