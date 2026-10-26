@@ -3,7 +3,7 @@
 //
 //   sheet-kit validate --manifest manifest.json [--data data.json]
 //   sheet-kit compile  --artifacts DIR --out DIR [--timezone TZ]
-//   sheet-kit deploy   --project DIR [--script-id ID] [--deployment-id ID] [--description D] [--expect-domain D]
+//   sheet-kit deploy   --project DIR [--script-id ID] [--deployment-id ID]
 //   sheet-kit publish  --artifact DIR --config webhook.json [--expected-latest DATE] [--full] [--profile]
 //   sheet-kit inspect  --spreadsheet-id ID | --config webhook.json  [--sheet NAME] [--range A1] [--cells]
 //   sheet-kit auth     login [--client client_secret.json] [--account EMAIL] [--expect-domain D] [--no-browser] | status | logout
@@ -11,7 +11,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { checkDomain, configDir, getAccessToken, isSignedIn, loadToken, login, logout, whoami } from "../google/auth.js";
+import { configDir, getAccessToken, isSignedIn, loadToken, login, logout, whoami } from "../google/auth.js";
 import { inspectViaSheetsApi } from "./inspect.js";
 import { compileAppsScript } from "../utils/compiler.js";
 import { deployAppsScript } from "./deploy.js";
@@ -83,26 +83,20 @@ function cmdCompile(args) {
 }
 
 /** @param {string[]} args */
-async function cmdDeploy(args) {
+function cmdDeploy(args) {
   const f = flags(args);
   if (!f.project) { process.stderr.write("--project is required\n"); return 2; }
 
   try {
-    const token = await getAccessToken();
-    const domain = f["expect-domain"] ?? process.env.SHEET_KIT_EXPECT_DOMAIN;
-    if (domain) {
-      const domainErr = checkDomain(await whoami(token), domain);
-      if (domainErr) throw new Error(domainErr);
-    }
-    await deployAppsScript({
+    deployAppsScript({
       projectDir: f.project,
       scriptId: f["script-id"],
       deploymentId: f["deployment-id"],
       description: f.description,
-    }, { token, log: (msg) => process.stdout.write(msg + "\n") });
+    });
     return 0;
   } catch (error) {
-    process.stderr.write(`deploy: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(`deploy: ${String(error)}\n`);
     return 1;
   }
 }
@@ -209,7 +203,7 @@ async function main() {
     case "version": process.stdout.write(`sheet-kit contract v${CONTRACT_VERSION}\n`); return 0;
     case "validate": return cmdValidate(argv.slice(1));
     case "compile": return cmdCompile(argv.slice(1));
-    case "deploy": return await cmdDeploy(argv.slice(1));
+    case "deploy": return cmdDeploy(argv.slice(1));
     case "publish": return await cmdPublish(argv.slice(1));
     case "inspect": return await cmdInspect(argv.slice(1));
     case "auth": return await cmdAuth(argv.slice(1));
