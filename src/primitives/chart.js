@@ -1,5 +1,5 @@
 import { definePrimitive } from "../utils/define-primitive.js";
-import { chartLayout_ } from "../runtime/grid.js";
+import { chartLayout_ } from "../render/grid.js";
 import { colorStyle, dimensionProps, gridRange } from "../render/requests.js";
 
 const LEGEND = /** @type {Record<string, string>} */ ({
@@ -105,7 +105,7 @@ function applySeries(series, opts) {
 // chart — embed charts driven by named columns. Currently line charts:
 // charts: [{type:"line", title, x, series:[..], num_headers, v_axis_format,
 //           colors:[], width, height, position:{row,col}}]. x/series address
-// columns by NAME; the compiler-independent runtime resolves them to A1 ranges.
+// columns by NAME; grid helpers resolve them to A1 ranges.
 // Removes existing charts first so re-renders don't stack duplicates.
 //
 // For a chart inside a stacked tab (headings, sub-tables), three options:
@@ -116,15 +116,10 @@ function applySeries(series, opts) {
 //     (position.col still applies; give the level a tall row_height to make room).
 //   hide_data: hide the chart's data rows and x/series columns (the chart
 //     still plots them).
-//   options: extra chart options passed to setOption as-is, e.g.
+//   options: supported Google Charts options mapped to the API, e.g.
 //     {"series": {"1": {"lineDashStyle": [4, 4]}}, "legend.position": "bottom"}.
 export default definePrimitive({
   name: "chart",
-  region: "chart",
-  inputs: function (ctx) {
-    if (!(ctx.spec.charts || []).length) return null;
-    return { c: ctx.spec.charts, h: ctx.headerRows, n: ctx.dataRowCount, rows: ctx.rows, hdr: ctx.headers, sec: ctx.sections };
-  },
   field: "charts",
   order: 80,
   validate(charts, columns) {
@@ -139,7 +134,7 @@ export default definePrimitive({
     return "";
   },
   requests(ctx) {
-    // Replace, never stack: every chart on the tab goes first (as render does).
+    // Replace, never stack: remove the tab's existing charts first.
     /** @type {import("../render/requests.js").Request[]} */
     const out = ctx.sheet.chartIds.map((objectId) => ({ deleteEmbeddedObject: { objectId } }));
     const charts = ctx.spec.charts || [];
@@ -157,46 +152,5 @@ export default definePrimitive({
       }
     }
     return out;
-  },
-  render: function (ctx) {
-    var sheet = ctx.sheet;
-    for (var attempt = 0; attempt < 3; attempt++) {
-      try {
-        var existing = sheet.getCharts();
-        if (!existing.length) break;
-        existing.forEach(function (c) { try { sheet.removeChart(c); } catch (ignore) {} });
-      } catch (ignore) { SpreadsheetApp.flush(); }
-    }
-
-    var charts = ctx.spec.charts || [];
-    if (charts.some(function (c) { return c.hide_data; })) {
-      sheet.showRows(1, sheet.getMaxRows());
-      sheet.showColumns(1, sheet.getMaxColumns());
-    }
-
-    charts.forEach(function (c) {
-      var layout = chartLayout_(ctx, c);
-      if (!layout) return;
-      var headerRow = layout.headerRow, height = layout.height, cols = layout.cols;
-
-      var builder = sheet.newChart().asLineChart();
-      cols.forEach(function (col) { builder.addRange(sheet.getRange(headerRow, col, height, 1)); });
-
-      builder.setNumHeaders(c.num_headers != null ? c.num_headers : 1);
-      if (c.title) builder.setTitle(c.title);
-      if (c.v_axis_format) builder.setOption("vAxis.format", c.v_axis_format);
-      if (c.colors) builder.setOption("colors", c.colors);
-      Object.keys(c.options || {}).forEach(function (k) { builder.setOption(k, c.options[k]); });
-      builder.setOption("width", c.width || 920).setOption("height", c.height || 400);
-
-      builder.setPosition(layout.row, layout.col, 0, 0);
-
-      if (c.hide_data) {
-        builder.setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_BOTH);
-        sheet.hideRows(headerRow, height);
-        cols.forEach(function (col) { sheet.hideColumns(col); });
-      }
-      sheet.insertChart(builder.build());
-    });
   },
 });

@@ -1,13 +1,11 @@
 import { definePrimitive } from "../utils/define-primitive.js";
-import { columnIndex_ } from "../runtime/grid.js";
+import { columnIndex_ } from "../render/grid.js";
 import { formatCells, gridRange } from "../render/requests.js";
 
 // numberFormat — apply a Sheets number format ("$0.00", "0.0%", "#,##0", …) to
 // a column's data rows.
 export default definePrimitive({
   name: "numberFormat",
-  region: "format",
-  inputs: function (ctx) { return { f: ctx.spec.number_formats || null, r: ctx.firstDataRow, n: ctx.dataRowCount }; },
   field: "number_formats",
   order: 20,
   validate(formats, columns) {
@@ -21,13 +19,6 @@ export default definePrimitive({
     return (ctx.spec.number_formats || []).map((nf) => {
       const column = columnIndex_(ctx.columns, nf.column);
       return column > 0 ? formatCells(gridRange(ctx.sheetId, ctx.firstDataRow, column, ctx.dataRowCount, 1), { numberFormat: nf.format }) : null;
-    });
-  },
-  render: function (ctx) {
-    if (ctx.dataRowCount <= 0) return;
-    (ctx.spec.number_formats || []).forEach(function (nf) {
-      var column = columnIndex_(ctx.columns, nf.column);
-      if (column > 0) ctx.sheet.getRange(ctx.firstDataRow, column, ctx.dataRowCount, 1).setNumberFormat(nf.format);
     });
   },
 });

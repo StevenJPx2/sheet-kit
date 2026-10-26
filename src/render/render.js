@@ -1,32 +1,29 @@
 // The Sheets API renderer: renders a manifest + data straight into the
-// manifest's spreadsheet, producing what the Apps Script renderTab produces in
-// full mode, in a fixed number of calls for the whole spreadsheet:
+// manifest's spreadsheet in a fixed number of calls for the whole spreadsheet:
 //
-//   1. spreadsheets.get           sheet ids, grid sizes, frozen counts, rule/chart/metadata ids
+//   1. spreadsheets.get           sheet ids, grid sizes, frozen counts, rule/chart ids
 //   2. values.batchGet            (only tabs with preserve columns) the current cells
 //   3. batchUpdate  "reset"       add missing tabs; unmerge, unfreeze, clear values+formats,
 //                                 row heights 21, drop conditional formats; text-format string columns
-//   4. values.batchUpdate         every tab's grid, USER_ENTERED (parsed like setValues)
+//   4. values.batchUpdate         every tab's grid, USER_ENTERED
 //   5. batchUpdate  "style"       each used primitive's requests(ctx), then the cf rules in order
 //
 // The reset must precede the values (string columns are text-formatted first so
 // "$2.38" isn't parsed into 2.38) and the style must follow them (auto-resized
 // rows measure the written text), hence two batchUpdates. Writes over ~1.5 MB
 // are split into several calls.
-import { buildGrid_, normalizeWidth_, preserveValues_ } from "../runtime/grid.js";
-import { usedPrimitives } from "../utils/compiler.js";
+import { buildGrid_, normalizeWidth_, preserveValues_ } from "./grid.js";
+import { usedPrimitives } from "../primitives/index.js";
 import { quoteSheet, sheetsClient } from "../google/sheets.js";
 import { dimensionProps, formatCells, gridProps, gridRange } from "./requests.js";
 
-/** The Apps Script renderer's incremental-render state key (core.js SK_STATE_KEY). */
-const LEGACY_STATE_KEY = "sk_layout";
 const NEW_SHEET_ROWS = 1000;
 const NEW_SHEET_COLUMNS = 26;
 const DEFAULT_ROW_HEIGHT = 21;
 
 export const META_FIELDS =
   "sheets(properties(sheetId,title,index,hidden,gridProperties(rowCount,columnCount,frozenRowCount,frozenColumnCount))," +
-  "conditionalFormats(ranges(sheetId)),charts(chartId),developerMetadata(metadataId,metadataKey))";
+  "conditionalFormats(ranges(sheetId)),charts(chartId))";
 
 /**
  * @typedef {Object} SheetState  what render needs to know about an existing tab
@@ -39,11 +36,10 @@ export const META_FIELDS =
  * @property {number}   frozenColumns
  * @property {number}   cfCount
  * @property {number[]} chartIds
- * @property {number[]} legacyStateIds  developer metadata ids of the Apps Script render state
  *
  * @typedef {import("../render/requests.js").Request} Request
  * @typedef {import("../google/sheets.js").ValueRange} ValueRange
- * @typedef {{ reset: Request[], values: ValueRange[], style: Request[], tabs: { sheet: string, rows: number, mode: "full" }[], warnings: string[] }} RenderPlan
+ * @typedef {{ reset: Request[], values: ValueRange[], style: Request[], tabs: { sheet: string, rows: number }[], warnings: string[] }} RenderPlan
  */
 
 /**
@@ -65,9 +61,6 @@ export function sheetStates(meta) {
       frozenColumns: g.frozenColumnCount ?? 0,
       cfCount: (s.conditionalFormats ?? []).length,
       chartIds: (s.charts ?? []).map((/** @type {any} */ c) => c.chartId),
-      legacyStateIds: (s.developerMetadata ?? [])
-        .filter((/** @type {any} */ m) => m.metadataKey === LEGACY_STATE_KEY)
-        .map((/** @type {any} */ m) => m.metadataId),
     });
   }
   return states;
@@ -107,7 +100,7 @@ export function planRender(manifest, data, states, oldGrids = new Map()) {
   const taken = new Set([...states.values()].map((s) => s.sheetId));
   /** @type {RenderPlan} */
   const plan = { reset: [], values: [], style: [], tabs: [], warnings: [] };
-  // renderTab runs tab by tab, so a tab's "last" is last among the tabs that
+  // Placement is planned tab by tab, so "last" is last among the tabs that
   // exist at its turn; a new tab rendered later still lands after it.
   let sheetCount = states.size;
 
@@ -120,7 +113,7 @@ export function planRender(manifest, data, states, oldGrids = new Map()) {
     if (tab.values) plan.values.push(tab.values);
     plan.style.push(...tab.style);
     plan.warnings.push(...tab.warnings.map((w) => `${spec.name}: ${w}`));
-    plan.tabs.push({ sheet: spec.name, rows: tab.rows, mode: "full" });
+    plan.tabs.push({ sheet: spec.name, rows: tab.rows });
   }
   plan.warnings = [...new Set(plan.warnings)];
   return plan;
@@ -164,7 +157,7 @@ function planTab(spec, rows, { state, sheetId, sheetCount, used, oldGrid }) {
 }
 
 /**
- * skWriteTable_ as requests: a fresh tab, or an existing one wiped back to
+ * A fresh tab, or an existing one wiped back to
  * values-free, format-free, unmerged, unfrozen, 21px rows and no conditional
  * formats. String columns are then text-formatted so their display text
  * survives the USER_ENTERED write.
@@ -188,9 +181,6 @@ function resetRequests(spec, state, ctx) {
     out.push({ updateCells: { range: { sheetId }, fields: "userEnteredValue,userEnteredFormat" } });
     out.push(dimensionProps(sheetId, "ROWS", 1, gridRows, { pixelSize: DEFAULT_ROW_HEIGHT }));
     for (let i = state.cfCount - 1; i >= 0; i--) out.push({ deleteConditionalFormatRule: { sheetId, index: i } });
-    // A later webhook publish must not trust the Apps Script renderer's old
-    // incremental state: without it, it does a full render.
-    for (const metadataId of state.legacyStateIds) out.push({ deleteDeveloperMetadata: { dataFilter: { developerMetadataLookup: { metadataId } } } });
   }
   ctx.columns.forEach((c, i) => {
     if (c && c.type === "string" && i < ctx.width) {

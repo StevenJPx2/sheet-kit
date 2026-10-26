@@ -70,15 +70,12 @@ test("compare reads both spreadsheets through the API, with optional tab filter 
   await assert.rejects(compareViaSheetsApi("tok", { spreadsheetId: "A", against: "B" }, async () => Response.json({ error: { message: "denied" } }, { status: 403 })), /HTTP 403/);
 });
 
-test("compare CLI: 0 identical, 1 different/error, 2 missing flags; inspect API and webhook remain available", () => {
+test("compare CLI: 0 identical, 1 different/error, 2 missing flags; inspect reads the API", () => {
   const dir = mkdtempSync(join(tmpdir(), "sheet-kit-compare-"));
   const preload = join(dir, "fetch.mjs");
-  const config = join(dir, "webhook.json");
-  writeFileSync(config, JSON.stringify({ url: "https://script.google.com/test", secret: "s" }));
   writeFileSync(preload, `
     const response = ${response.toString()};
     globalThis.fetch = async (url, init) => {
-      if (String(url).includes("script.google.com")) return Response.json({ok:true, spreadsheet:{name:"webhook"}});
       if (process.env.COMPARE_ERROR) return Response.json({error:{message:"denied"}}, {status:403});
       if (init.method !== "GET") throw new Error("unexpected write");
       const id = new URL(url).pathname.split("/").at(-1);
@@ -100,7 +97,6 @@ test("compare CLI: 0 identical, 1 different/error, 2 missing flags; inspect API 
     assert.match(error.stderr, /HTTP 403/);
     assert.equal(cli(["compare", "--spreadsheet-id", "A"]).status, 2);
     assert.equal(JSON.parse(cli(["inspect", "--spreadsheet-id", "A", "--cells"]).stdout).sheets[0].values[0][0], "hello");
-    assert.equal(JSON.parse(cli(["inspect", "--config", config]).stdout).name, "webhook");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -5,8 +5,7 @@
 // request types, out-of-grid ranges, bad indexes, overlapping merges) with a
 // 400, so a malformed request fails the test instead of passing silently.
 //
-// snapshot() normalizes the result into the same shape as fake-apps-script.js,
-// so the two renderers can be compared cell by cell.
+// snapshot() normalizes the result for cell-by-cell assertions and goldens.
 
 /** @typedef {Record<string, any>} Obj */
 
@@ -43,7 +42,7 @@ function addSheet(book, props) {
   book.sheets.push({
     sheetId: props.sheetId, title: props.title, hidden: false,
     rowCount: g.rowCount ?? 1000, columnCount: g.columnCount ?? 26, frozenRows: 0, frozenColumns: 0,
-    cells: new Map(), merges: [], cf: [], charts: [], metadata: [],
+    cells: new Map(), merges: [], cf: [], charts: [],
     rowHeights: new Map(), colWidths: new Map(), hiddenRows: new Set(), hiddenColumns: new Set(),
   });
 }
@@ -193,10 +192,6 @@ const HANDLERS = /** @type {Record<string, (book: Obj, r: Obj) => void>} */ ({
     }
     throw new Error(`no embedded object ${r.objectId}`);
   },
-  deleteDeveloperMetadata(book, r) {
-    const id = r.dataFilter.developerMetadataLookup.metadataId;
-    for (const s of book.sheets) s.metadata = s.metadata.filter((/** @type {Obj} */ m) => m.metadataId !== id);
-  },
 });
 
 /** @param {Obj} book @param {Obj} request @param {number} i */
@@ -286,7 +281,6 @@ function metadata(book) {
       },
       conditionalFormats: s.cf.map((/** @type {Obj} */ rule) => ({ ranges: rule.ranges.map((/** @type {Obj} */ r) => ({ sheetId: r.sheetId })) })),
       charts: s.charts.map((/** @type {Obj} */ c) => ({ chartId: c.chartId })),
-      developerMetadata: s.metadata,
     })),
   };
 }
@@ -304,7 +298,7 @@ const rect = (r) => [r.startRowIndex + 1, r.startColumnIndex + 1, r.endRowIndex 
 
 const WRAP = /** @type {Record<string, string>} */ ({ WRAP: "WRAP", OVERFLOW_CELL: "OVERFLOW", CLIP: "CLIP" });
 
-/** The normalized view shared with fake-apps-script.js. @param {Obj} book */
+/** The normalized view used by renderer tests. @param {Obj} book */
 function snapshot(book) {
   return {
     order: book.sheets.map((/** @type {Obj} */ s) => s.title),

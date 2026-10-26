@@ -59,11 +59,6 @@ export function credentialSource() {
   return "";
 }
 
-/** True when a token is available without an interactive sign-in. */
-export function isSignedIn() {
-  return credentialSource() !== "";
-}
-
 /**
  * Renew an access token through the login service.
  * @param {string} refreshToken

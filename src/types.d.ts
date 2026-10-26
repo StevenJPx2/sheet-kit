@@ -1,6 +1,4 @@
-// Shared type shapes (the manifest/data contract) and ambient declarations for
-// the globals a primitive render body sees inside the compiled Apps Script
-// bundle. Implementation is all JavaScript + JSDoc; this file is types only.
+// Shared manifest/data contract. Implementation is JavaScript + JSDoc.
 
 export type ColumnType = "string" | "number" | "integer" | "money" | "percent" | "date" | "hour";
 export type GradientKind = "number" | "percent" | "percentile" | "min" | "max";
@@ -45,6 +43,16 @@ export interface Chart {
   colors?: string[];
   width?: number; height?: number;
   position?: ChartPos;
+  data_from_last_header?: boolean;
+  anchor_section?: string;
+  hide_data?: boolean;
+  options?: Record<string, unknown>;
+}
+
+export interface CompareStyle {
+  a: string;
+  b: string;
+  style?: { bold?: boolean; italic?: boolean; underline?: boolean; strikethrough?: boolean; font_color?: string; background?: string };
 }
 
 export interface Tab {
@@ -59,6 +67,7 @@ export interface Tab {
   number_formats?: NumberFormat[];
   row_label_styles?: RowLabelStyle[];
   text_rules?: TextRule[];
+  compare_style?: CompareStyle[];
   column_widths?: ColumnWidth[];
   gradients?: Gradient[];
   charts?: Chart[];
@@ -87,33 +96,4 @@ export interface Data {
   contract_version: number;
   generated_at?: string;
   datasets: Record<string, Row[]>;
-}
-
-// Globals available to every primitive render body (defined by runtime/grid.js,
-// runtime/core.js and Google Apps Script) once the compiler concatenates the bundle.
-declare global {
-  function columnIndex_(columns: any[], name: string): number;
-  function columnName_(index: number): string;
-  function gradientRuns_(
-    values: any[][], columns: any[], firstDataRow: number, dataRowCount: number, groupBy?: string,
-  ): Array<{ firstRow: number; rowCount: number }>;
-  function matchLabel_(label: string, match: any): boolean;
-  function resolveFormula_(formula: string, columns: any[], sheetRow: number): string;
-  function gradientPoints_(g: any): {
-    min: { color: string; type: string; value?: string };
-    mid: { color: string; type: string; value?: string } | null;
-    max: { color: string; type: string; value?: string };
-  };
-  function compareFormula_(self: number, other: number, row: number): string;
-  function chartLayout_(ctx: any, chart: any): { headerRow: number; height: number; cols: number[]; row: number; col: number } | null;
-
-  var SK_RENDER_STEPS: Array<(ctx: any) => void>;
-  var SHEETKIT_MANIFEST: any;
-
-  // Apps Script services (loosely typed; runtime-only).
-  var SpreadsheetApp: any;
-  var Charts: any;
-  var Utilities: any;
-  var ContentService: any;
-  var PropertiesService: any;
 }

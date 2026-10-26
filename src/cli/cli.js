@@ -1,44 +1,43 @@
 #!/usr/bin/env node
-// sheet-kit CLI — the command layer over the compiler/validator/publisher.
+// sheet-kit CLI — validate, publish, inspect and compare through the Sheets API.
 //
 //   sheet-kit validate --manifest manifest.json [--data data.json]
-//   sheet-kit compile  --artifacts DIR --out DIR [--timezone TZ]
-//   sheet-kit deploy   --project DIR [--script-id ID] [--deployment-id ID]
-//   sheet-kit publish  --artifact DIR [--expected-latest DATE] [--full]        (Sheets API, signed in)
-//   sheet-kit publish  --artifact DIR --config webhook.json [...] [--profile]  (deprecated webhook; SHEET_KIT_TRANSPORT=api overrides)
-//   sheet-kit inspect  --spreadsheet-id ID | --config webhook.json  [--sheet NAME] [--range A1] [--cells]
+//   sheet-kit publish  --artifact DIR [--expected-latest DATE]
+//   sheet-kit inspect  --spreadsheet-id ID [--sheet NAME] [--range A1] [--cells]
 //   sheet-kit compare  --spreadsheet-id ID --against ID [--sheet NAME]
 //   sheet-kit auth     login [--account EMAIL] [--expect-domain D] [--no-browser] [--paste] | status | export-env | logout
 //   sheet-kit version
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { configDir, credentialSource, getAccessToken, isSignedIn, loadToken, login, loginWithPaste, logout, whoami } from "../google/auth.js";
+import { configDir, credentialSource, getAccessToken, loadToken, login, loginWithPaste, logout, whoami } from "../google/auth.js";
 import { inspectViaSheetsApi } from "./inspect.js";
 import { compareViaSheetsApi } from "./compare.js";
-import { compileAppsScript } from "../utils/compiler.js";
-import { deployAppsScript } from "./deploy.js";
 import { CONTRACT_VERSION, validate } from "../utils/validate.js";
 import { checkCoverage, validateData } from "../utils/data.js";
-import { loadPublishConfig, publish, requestWebhook } from "./publish.js";
+import { publish } from "./publish.js";
 import { cmdSkills } from "./skills.js";
 
 /**
- * Minimal --flag value parser (order-independent).
+ * Explicit command flags: reject unknown/missing arguments before side effects.
  * @param {string[]} args
+ * @param {string[]} values
+ * @param {string[]} [booleans]
  * @returns {Record<string, string>}
  */
-function flags(args) {
+function flags(args, values, booleans = []) {
   /** @type {Record<string, string>} */
   const out = {};
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a.startsWith("--")) {
-      const key = a.slice(2);
-      const next = args[i + 1];
-      if (next !== undefined && !next.startsWith("--")) { out[key] = next; i++; }
-      else out[key] = "true";
-    }
+    if (!a.startsWith("--")) throw new SyntaxError(`unexpected argument ${a}`);
+    const key = a.slice(2);
+    if (booleans.includes(key)) { out[key] = "true"; continue; }
+    if (!values.includes(key)) throw new SyntaxError(`unknown flag --${key}`);
+    const next = args[i + 1];
+    if (next === undefined || next.startsWith("--")) throw new SyntaxError(`--${key} requires a value`);
+    out[key] = next;
+    i++;
   }
   return out;
 }
@@ -49,7 +48,7 @@ function readJson(path) {
 
 /** @param {string[]} args */
 function cmdValidate(args) {
-  const f = flags(args);
+  const f = flags(args, ["manifest", "data"]);
   if (!f.manifest) { process.stderr.write("--manifest is required\n"); return 2; }
 
   let m;
@@ -71,42 +70,8 @@ function cmdValidate(args) {
 }
 
 /** @param {string[]} args */
-function cmdCompile(args) {
-  const f = flags(args);
-  if (!f.artifacts || !f.out) { process.stderr.write("--artifacts and --out are required\n"); return 2; }
-
-  try {
-    const result = compileAppsScript(f.artifacts, f.out, f.timezone ?? "Etc/UTC");
-    process.stdout.write(`compiled ${result.tabs} tab(s) to ${result.output} [primitives: ${result.primitives.join(", ")}]\n`);
-    return 0;
-  } catch (error) {
-    process.stderr.write(`compile: ${String(error)}\n`);
-    return 1;
-  }
-}
-
-/** @param {string[]} args */
-function cmdDeploy(args) {
-  const f = flags(args);
-  if (!f.project) { process.stderr.write("--project is required\n"); return 2; }
-
-  try {
-    deployAppsScript({
-      projectDir: f.project,
-      scriptId: f["script-id"],
-      deploymentId: f["deployment-id"],
-      description: f.description,
-    });
-    return 0;
-  } catch (error) {
-    process.stderr.write(`deploy: ${String(error)}\n`);
-    return 1;
-  }
-}
-
-/** @param {string[]} args */
 async function cmdPublish(args) {
-  const f = flags(args);
+  const f = flags(args, ["artifact", "expected-latest"]);
   if (!f.artifact) { process.stderr.write("--artifact is required\n"); return 2; }
 
   let m;
@@ -121,35 +86,30 @@ async function cmdPublish(args) {
   const cErr = checkCoverage(m, d);
   if (cErr) { process.stderr.write(`coverage: ${cErr}\n`); return 1; }
 
-  const err = await publish(
-    { manifest: m, data: d, artifactDir: f.artifact },
-    { config: f.config, expectedLatest: f["expected-latest"], full: f.full === "true", profile: f.profile === "true" },
-    (msg) => process.stderr.write(msg + "\n"),
-  );
-  if (err) { process.stderr.write(`publish: ${err}\n`); return 1; }
-  process.stdout.write(`published ${m.tabs.length} tab(s)\n`);
-  return 0;
+  try {
+    const result = await publish(m, d, { expectedLatest: f["expected-latest"] });
+    for (const warning of result.warnings) process.stderr.write(`warning: ${warning}\n`);
+    process.stderr.write(`rendered ${result.tabs.map((t) => t.sheet).join(", ")} (${result.calls} API calls)\n`);
+    process.stdout.write(`published ${result.tabs.length} tab(s)\n`);
+    return 0;
+  } catch (error) {
+    process.stderr.write(`publish: ${String(error)}\n`);
+    return 1;
+  }
 }
 
-/**
- * Sheets API when there is a spreadsheet id and a sign-in; otherwise the
- * deployed webhook (--config), which defaults to the manifest's spreadsheet.
- * @param {string[]} args
- */
+/** @param {string[]} args */
 async function cmdInspect(args) {
-  const f = flags(args);
+  const f = flags(args, ["spreadsheet-id", "sheet", "range"], ["cells"]);
   const spreadsheetId = f["spreadsheet-id"] ?? "";
-  const viaApi = Boolean(spreadsheetId) && isSignedIn();
-  if (!viaApi && !f.config) {
-    process.stderr.write("--spreadsheet-id (signed in via `sheet-kit auth login`) or --config is required\n");
+  if (!spreadsheetId) {
+    process.stderr.write("--spreadsheet-id is required\n");
     return 2;
   }
 
   const opts = { sheet: f.sheet ?? "", range: f.range ?? "", cells: f.cells === "true" };
   try {
-    const spreadsheet = viaApi
-      ? await inspectViaSheetsApi(await getAccessToken(), { spreadsheetId, ...opts })
-      : (await requestWebhook(loadPublishConfig(f.config), { action: "inspect", spreadsheetId, ...opts })).spreadsheet;
+    const spreadsheet = await inspectViaSheetsApi(await getAccessToken(), { spreadsheetId, ...opts });
     process.stdout.write(JSON.stringify(spreadsheet, null, 2) + "\n");
     return 0;
   } catch (error) {
@@ -160,7 +120,7 @@ async function cmdInspect(args) {
 
 /** @param {string[]} args */
 async function cmdCompare(args) {
-  const f = flags(args);
+  const f = flags(args, ["spreadsheet-id", "against", "sheet"]);
   if (!f["spreadsheet-id"] || !f.against) {
     process.stderr.write("--spreadsheet-id and --against are required\n");
     return 2;
@@ -193,7 +153,7 @@ const AUTH_USAGE = "usage: sheet-kit auth <login [--account EMAIL] [--expect-dom
 /** @param {string[]} args */
 async function cmdAuth(args) {
   const [sub, ...rest] = args;
-  const f = flags(rest);
+  const f = flags(rest, ["account", "expect-domain"], ["no-browser", "paste"]);
   const log = (/** @type {string} */ msg) => process.stderr.write(msg + "\n");
   try {
     switch (sub) {
@@ -237,17 +197,18 @@ async function main() {
   switch (cmd) {
     case "version": process.stdout.write(`sheet-kit contract v${CONTRACT_VERSION}\n`); return 0;
     case "validate": return cmdValidate(argv.slice(1));
-    case "compile": return cmdCompile(argv.slice(1));
-    case "deploy": return cmdDeploy(argv.slice(1));
     case "publish": return await cmdPublish(argv.slice(1));
     case "inspect": return await cmdInspect(argv.slice(1));
     case "compare": return await cmdCompare(argv.slice(1));
     case "auth": return await cmdAuth(argv.slice(1));
     case "skills": return cmdSkills(argv.slice(1));
     default:
-      process.stderr.write("usage: sheet-kit <validate|compile|deploy|publish|inspect|compare|auth|skills|version> [flags]\n");
+      process.stderr.write("usage: sheet-kit <validate|publish|inspect|compare|auth|skills|version> [flags]\n");
       return 2;
   }
 }
 
-main().then((code) => process.exit(code));
+main().then((code) => { process.exitCode = code; }, (error) => {
+  process.stderr.write(`${String(error)}\n`);
+  process.exitCode = error instanceof SyntaxError ? 2 : 1;
+});

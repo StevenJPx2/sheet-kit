@@ -1,6 +1,4 @@
-// The Sheets API renderer, offline: golden request fixtures, end-to-end runs
-// against an in-memory Sheets API, and parity with the Apps Script renderer
-// (the real compiled bundle run against an in-memory SpreadsheetApp).
+// The Sheets API renderer: golden requests and in-memory API execution.
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -11,7 +9,6 @@ import { chunkBySize } from "../google/sheets.js";
 import { PRIMITIVES } from "../primitives/index.js";
 import { validate } from "../utils/validate.js";
 import { planRender, renderManifest, sheetStates } from "./render.js";
-import { fakeAppsScript } from "./testing/fake-apps-script.js";
 import { fakeSheetsApi } from "./testing/fake-sheets-api.js";
 import { data, manifest } from "./testing/fixtures.js";
 
@@ -37,8 +34,7 @@ test("the fixture manifest is valid and covers every primitive", () => {
 });
 
 test("planRender: golden requests for a re-render over an existing styled tab", () => {
-  // "Daily" exists with 2 conditional-format rules, a chart, a frozen column
-  // and the Apps Script renderer's incremental state; "Stacked" is new.
+  // "Daily" has conditional formats, a chart and frozen columns; "Stacked" is new.
   const states = sheetStates({
     sheets: [
       { properties: { sheetId: 0, title: "Sheet1", index: 0, gridProperties: { rowCount: 1000, columnCount: 26 } } },
@@ -46,7 +42,6 @@ test("planRender: golden requests for a re-render over an existing styled tab", 
         properties: { sheetId: 7, title: "Daily", index: 1, gridProperties: { rowCount: 5, columnCount: 5, frozenRowCount: 2, frozenColumnCount: 1 } },
         conditionalFormats: [{ ranges: [{ sheetId: 7 }] }, { ranges: [{ sheetId: 7 }] }],
         charts: [{ chartId: 99 }],
-        developerMetadata: [{ metadataId: 5, metadataKey: "sk_layout" }, { metadataId: 6, metadataKey: "other" }],
       },
     ],
   });
@@ -56,7 +51,6 @@ test("planRender: golden requests for a re-render over an existing styled tab", 
   assert.ok(plan.reset.some((r) => r.deleteEmbeddedObject) === false, "charts are replaced by the chart primitive, in the style batch");
   assert.deepEqual(plan.style.filter((r) => r.deleteEmbeddedObject), [{ deleteEmbeddedObject: { objectId: 99 } }]);
   assert.deepEqual(plan.reset.filter((r) => r.deleteConditionalFormatRule).map((r) => r.deleteConditionalFormatRule.index), [1, 0]);
-  assert.deepEqual(plan.reset.filter((r) => r.deleteDeveloperMetadata), [{ deleteDeveloperMetadata: { dataFilter: { developerMetadataLookup: { metadataId: 5 } } } }]);
   assert.ok(plan.reset.some((r) => r.updateSheetProperties?.properties.gridProperties?.rowCount === 1000 || r.updateSheetProperties?.fields === "gridProperties.rowCount,gridProperties.columnCount"), "grid grows to fit");
 });
 
@@ -104,56 +98,42 @@ test("a re-render changes data only: no duplicate charts or conditional formats"
   assert.equal(third.sheets.Daily.cf.length, 6);
 });
 
-test("preserved columns keep user-entered values by row key, in both renderers", async () => {
+test("preserved columns keep user-entered values by row key", async () => {
   const api = fakeSheetsApi();
-  const legacy = fakeAppsScript(["Sheet1"]);
   const deps = { fetchImpl: api.fetchImpl, ...noWait };
   await renderManifest(manifest(), data(), { token: "t", deps });
-  legacy.render(manifest(), data());
 
   // A user types a note next to 2026-09-13 (sheet row 3, column C).
   api.book.sheets.find((s) => s.title === "Log").cells.set("2,2", { value: "promo day", format: {} });
-  legacy.book.sheets.find((s) => s.name === "Log").cells.set("2,2", { value: "promo day", format: {} });
 
   // Next publish: a new day arrives on top, so 2026-09-13 moves down a row.
   const next = data();
   next.datasets.log.unshift({ date: "2026-09-15", orders: 4 });
   const result = await renderManifest(manifest(), next, { token: "t", deps });
-  legacy.render(manifest(), next);
   assert.equal(result.calls, 5, "one values.batchGet for the preserve tab");
 
   const cells = api.snapshot().sheets.Log.cells;
   assert.equal(cells["3,0"].v, "2026-09-13");
   assert.equal(cells["3,2"].v, "promo day");
   assert.equal(cells["2,2"]?.v, undefined);
-  assert.deepEqual(cells, legacy.snapshot().sheets.Log.cells);
 });
 
-/** @param {any} a @param {any} b @param {string} when */
-function assertSameSheets(a, b, when) {
-  assert.deepEqual(b.order, a.order, `${when}: tab order`);
-  for (const name of a.order) {
-    for (const key of Object.keys(a.sheets[name])) {
-      assert.deepEqual(b.sheets[name][key], a.sheets[name][key], `${when}: ${name}.${key}`);
-    }
-  }
-}
-
-test("parity: the API renderer produces what the Apps Script renderer produces", async () => {
-  const legacy = fakeAppsScript(["Sheet1"]);
+test("a shorter re-render clears stale values, merges and formatting", async () => {
   const api = fakeSheetsApi();
   const deps = { fetchImpl: api.fetchImpl, ...noWait };
-
-  legacy.render(manifest(), data());
   await renderManifest(manifest(), data(), { token: "t", deps });
-  assertSameSheets(legacy.snapshot(), api.snapshot(), "first render");
-
-  // Re-render with different data and fewer rows over the styled sheet.
+  assert.ok(api.snapshot().sheets.Daily.cells["7,0"].v);
+  assert.ok(api.snapshot().sheets.Daily.merges.includes("7,0:8,7"));
   const next = data({ revenue: 40 });
   next.datasets.daily.splice(2, 1);
-  legacy.render(manifest(), next);
   await renderManifest(manifest(), next, { token: "t", deps });
-  assertSameSheets(legacy.snapshot(), api.snapshot(), "re-render");
+  const daily = api.snapshot().sheets.Daily;
+  assert.equal(daily.cells["7,0"], undefined);
+  assert.ok(!daily.merges.includes("7,0:8,7"));
+  assert.ok(daily.merges.includes("6,0:7,7"));
+  assert.equal(daily.cells["4,3"].v, 40);
+  assert.equal(daily.cf.length, 6);
+  assert.equal(daily.charts.length, 1);
 });
 
 test("warnings name what the API can't reproduce", () => {

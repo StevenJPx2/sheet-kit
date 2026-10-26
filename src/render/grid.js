@@ -1,12 +1,9 @@
 /**
- * grid — the pure layout logic both renderers share: A1 helpers, name-based
+ * grid — pure layout logic: A1 helpers, name-based
  * formula resolution, the long→grid value builder, manual-column preservation,
  * label matching, gradient runs/points, compareStyle formulas and chart layout.
  *
- * No SpreadsheetApp, no I/O. Authored as an ES module so the Node (Sheets API)
- * renderer imports it directly; `sheet-kit compile` strips the `export`
- * keywords and concatenates it ahead of core.js, so the Apps Script bundle sees
- * the same functions as globals. One source, two runtimes.
+ * No I/O. The renderer and primitives import these helpers directly.
  */
 
 /** A1 column letter from a 1-based column index. columnName_(50) === 'AX'. */
@@ -20,7 +17,7 @@ export function columnName_(index) {
   return name;
 }
 
-/** Pad ragged rows to a common width so setValues never throws. */
+/** Pad ragged rows to a common width before writing. */
 export function normalizeWidth_(values) {
   var width = 1;
   for (var i = 0; i < values.length; i++) width = Math.max(width, values[i].length);
@@ -274,7 +271,7 @@ export function compareFormula_(self, other, row) {
  * row its data starts at, the data height (header included), the x + series
  * columns, and the 1-based anchor row/col. Returns null when the chart can't be
  * placed (unknown x, fewer than 2 rows, missing __header__ or anchor section),
- * in which case neither renderer draws it.
+ * in which case the renderer skips it.
  */
 export function chartLayout_(ctx, c) {
   var headerRow = ctx.headerRows;

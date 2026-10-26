@@ -1,6 +1,6 @@
 ---
 name: sheet-kit
-description: Render Google Sheets from manifest + data with sheet-kit through the Sheets API. Sign in, validate, publish, inspect and compare sheets; also supports deprecated compile/deploy/webhook workflows.
+description: Render Google Sheets from manifest + data with sheet-kit through the Sheets API. Sign in, validate, publish, inspect and compare sheets.
 allowed-tools: Bash(sheet-kit:*)
 hidden: true
 ---

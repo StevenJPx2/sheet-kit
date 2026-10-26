@@ -39,7 +39,7 @@ const RESPONSE = {
   ],
 };
 
-test("structure maps to the webhook's inspect shape", () => {
+test("structure maps to the public inspect shape", () => {
   assert.deepEqual(mapSpreadsheet(RESPONSE, {}), {
     id: "SS1",
     name: "Acme Dashboard",
@@ -62,7 +62,7 @@ test("structure maps to the webhook's inspect shape", () => {
   });
 });
 
-test("--cells adds the data range's values, formulas and formats with SpreadsheetApp defaults", () => {
+test("--cells adds values, formulas, formats and explicit defaults", () => {
   const [daily] = mapSpreadsheet(RESPONSE, { sheet: "Daily", cells: true }).sheets;
   assert.equal(daily.range, "A1:C2");
   assert.deepEqual(daily.values, [["Date", "Sessions", "CVR"], ["2026-10-25", "120", "120.00%"]]);

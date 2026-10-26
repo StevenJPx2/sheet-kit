@@ -1,5 +1,5 @@
 import { definePrimitive } from "../utils/define-primitive.js";
-import { columnIndex_ } from "../runtime/grid.js";
+import { columnIndex_ } from "../render/grid.js";
 import { autoResizeRows, formatCells, gridRange, mergeCells } from "../render/requests.js";
 
 // header — header-row emphasis. Always runs: bolds, left-aligns, and wraps the
@@ -7,8 +7,6 @@ import { autoResizeRows, formatCells, gridRange, mergeCells } from "../render/re
 // 1), and bolds any column flagged bold.
 export default definePrimitive({
   name: "header",
-  region: "format",
-  inputs: function (ctx) { return { h: ctx.headerRows, w: ctx.width, n: ctx.dataRowCount, bold: ctx.columns.map(function (c) { return !!c.bold; }), merges: ctx.spec.header_merges || null }; },
   field: null,
   order: 10,
   validate(tab, columns) {
@@ -36,29 +34,5 @@ export default definePrimitive({
       if (from > 0 && to > from) out.push(mergeCells(gridRange(ctx.sheetId, groupRow, from, 1, to - from + 1)));
     }
     return out;
-  },
-  render: function (ctx) {
-    var sheet = ctx.sheet, columns = ctx.columns, width = ctx.width;
-
-    sheet.getRange(1, 1, ctx.headerRows, width)
-      .setFontWeight("bold")
-      .setHorizontalAlignment("left")
-      .setWrap(true);
-    sheet.autoResizeRows(1, ctx.headerRows);
-
-    if (ctx.dataRowCount > 0) {
-      columns.forEach(function (c, ci) {
-        if (c.bold) sheet.getRange(ctx.firstDataRow, ci + 1, ctx.dataRowCount, 1).setFontWeight("bold");
-      });
-    }
-
-    // Group labels live on the second-to-last header row (the row above the
-    // column names), so an optional banner above them doesn't shift the merge.
-    var groupRow = ctx.headerRows >= 2 ? ctx.headerRows - 1 : 1;
-    (ctx.spec.header_merges || []).forEach(function (m) {
-      var from = columnIndex_(columns, m.from);
-      var to = columnIndex_(columns, m.to);
-      if (from > 0 && to > from) sheet.getRange(groupRow, from, 1, to - from + 1).merge();
-    });
   },
 });

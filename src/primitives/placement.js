@@ -4,12 +4,9 @@ const POSITIONS = new Set(["first", "last"]);
 
 // placement — where the tab sits and whether it shows. placement: {position?, hidden?}.
 // position "first"/"last" moves the tab to that end of the tab bar; hidden true
-// hides it, false shows it, absent leaves a manual hide alone. Re-applied when
-// the placement changes and on every full render.
+// hides it, false shows it, absent leaves a manual hide alone.
 export default definePrimitive({
   name: "placement",
-  region: "sheet",
-  inputs: function (ctx) { return ctx.spec.placement || null; },
   field: "placement",
   order: 90,
   validate(placement) {
@@ -25,7 +22,7 @@ export default definePrimitive({
     const placement = ctx.spec.placement;
     if (!placement) return [];
     const out = [];
-    // Move before hiding, as render does. Indexes count "before the move"; the
+    // Indexes count "before the move"; the
     // API ignores a move to the current index (or current + 1), so "last" is a
     // no-op for a tab that is already last.
     if (placement.position) {
@@ -36,23 +33,5 @@ export default definePrimitive({
       out.push({ updateSheetProperties: { properties: { sheetId: ctx.sheetId, hidden: placement.hidden }, fields: "hidden" } });
     }
     return out;
-  },
-  render: function (ctx) {
-    var placement = ctx.spec.placement;
-    if (!placement) return;
-    var sheet = ctx.sheet;
-    var spreadsheet = sheet.getParent();
-
-    // Move before hiding: activating a sheet to move it would show it again.
-    if (placement.position) {
-      var target = placement.position === "last" ? spreadsheet.getNumSheets() : 1;
-      if (sheet.getIndex() !== target) {
-        spreadsheet.setActiveSheet(sheet);
-        spreadsheet.moveActiveSheet(target);
-      }
-    }
-
-    if (placement.hidden === true && !sheet.isSheetHidden()) sheet.hideSheet();
-    if (placement.hidden === false && sheet.isSheetHidden()) sheet.showSheet();
   },
 });

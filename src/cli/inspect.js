@@ -1,7 +1,5 @@
-// `inspect` through the Sheets API (spreadsheets.get with a field mask),
-// producing the same shape as the webhook's inspectSpreadsheet_
-// (src/runtime/webhook.js), so callers can't tell the two paths apart.
-// Defaults for unformatted cells match what SpreadsheetApp reports.
+// Inspect through spreadsheets.get with a field mask. Map API properties and
+// sparse cell blocks to a tab-oriented snapshot, with explicit cell defaults.
 import { googleJson } from "../google/http.js";
 
 const API = "https://sheets.googleapis.com/v4/spreadsheets";
@@ -44,7 +42,7 @@ export async function inspectViaSheetsApi(token, opts, fetchImpl = fetch) {
 }
 
 /**
- * Map a spreadsheets.get response to the webhook's inspect output.
+ * Map a spreadsheets.get response to the public inspect output.
  * @param {any} resp
  * @param {Omit<InspectOptions, "spreadsheetId">} opts
  */

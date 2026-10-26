@@ -11,5 +11,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.js", "src/**/*.d.ts"],
-  "exclude": ["node_modules", "src/runtime/**", "src/**/*.test.js", "src/**/testing/**"]
+  "exclude": ["node_modules", "src/**/*.test.js", "src/**/testing/**"]
 }

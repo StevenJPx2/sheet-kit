@@ -47,32 +47,28 @@ and refreshes tokens; Google receives the consent request.
 
 ## Rendering architecture
 
-Each primitive owns validation and both render behaviours. Normal publishing
-runs in Node through the Sheets API; the deprecated Apps Script compiler still
-includes only the primitives used by the manifest for existing webhooks.
+Each primitive owns validation and Sheets API request generation. Publishing
+runs in Node and reads both artifact files on every invocation.
 
 ```text
 src/
   primitives/*.js     each feature (gradient, chart, freeze, …) as one definePrimitive
-                       module: field, schema check, requests(ctx), legacy render(ctx)
-  primitives/index.js the registry the compiler + validator walk
-  runtime/grid.js     shared pure grid, formula, preservation and layout logic
-  runtime/core.js     legacy Apps Script renderTab dispatch
-  runtime/webhook.js  deprecated doPost transport + inspect
-  render/             Node renderer, Sheets request builders, parity test fakes/goldens
+                       module: field, schema check, requests(ctx)
+  primitives/index.js the registry the renderer + validator walk
+  render/             grid/formula logic, request planning and execution, fakes/goldens
   google/             sign-in, authenticated HTTP retries, chunked Sheets client
-  utils/              definePrimitive builder, compiler, validator, data coverage:
+  utils/              primitive builder, validator, data coverage:
                         define-primitive.js  the typed primitive builder
-                        compiler.js          assembles core + used primitives + dispatch → *.gs
                         validate.js          core structural checks; delegates field rules to primitives
                         data.js              dataset/coverage checks
-  cli/                command layer (publish, inspect, compare, legacy deploy)
-  types.d.ts          shared shapes + ambient runtime globals (types only)
+  cli/                command layer (publish, inspect, compare, auth, skills)
+  types.d.ts          manifest/data contract (types only)
 ```
 
 All JavaScript with JSDoc types; typecheck with `tsc -p jsconfig.json`. A new
 feature is one file in `src/primitives/` added to the registry — no change to the
-compiler, the validator, or any other primitive.
+renderer, the validator, or any other primitive. Each source directory has a
+README with its boundaries and usage examples.
 
 ## Adding a primitive
 
@@ -80,19 +76,17 @@ compiler, the validator, or any other primitive.
 import { definePrimitive } from "../utils/define-primitive.js";
 
 export default definePrimitive({
-  name: "gradient",         // handler becomes sk_gradient_
-  field: "gradients",       // manifest tab field that triggers inclusion (null = always)
+  name: "gradient",
+  field: "gradients",       // manifest field that selects the step (null = always)
   order: 30,                // render order
   validate(gradients, columns) { /* schema check for this field; "" if ok */ },
   requests(ctx) { return []; /* Node behaviour: Sheets batchUpdate requests */ },
-  render: function (ctx) {  /* Apps Script behaviour, serialised into the bundle */ },
 });
 ```
 
-`render` is never executed in Node — the compiler serialises it into the bundle,
-where it runs against Apps Script + core globals (`columnIndex_`, `gradientRuns_`,
-…, declared in `types.d.ts`). `validate` and `requests` run in Node. Both
-renderers share the pure helpers in `runtime/grid.js`.
+`validate` and `requests` run in Node. Primitives import pure layout helpers
+from `render/grid.js`; conditional rules accumulate on `ctx.cfRules` and are
+installed in order after the primitive requests.
 
 ## Contract (v1)
 
@@ -122,15 +116,15 @@ npm run check   # tsc -p jsconfig.json (checkJs over JSDoc)
 
 ```sh
 sheet-kit validate --manifest manifest.json [--data data.json]
-sheet-kit publish  --artifact DIR [--expected-latest DATE] [--full]
+sheet-kit publish  --artifact DIR [--expected-latest DATE]
 sheet-kit inspect  --spreadsheet-id ID [--sheet NAME] [--range A1] [--cells]
 sheet-kit compare  --spreadsheet-id A --against B [--sheet NAME]
 sheet-kit version
 ```
 
 `publish` reads **both** files from DIR and renders into `manifest.spreadsheet_id`.
-Structure changes need only another publish, not compile/deploy. API renders are
-always full (`--full` remains accepted): normally four calls for all tabs, plus
+Structure changes need only another publish. Renders are always full:
+normally four calls for all tabs, plus
 one read if preserving user columns, with large writes split near 1.5 MB. API
 429/5xx responses use bounded exponential backoff. There is no Drive staging.
 
@@ -138,7 +132,7 @@ one read if preserving user columns, with large writes split near 1.5 MB. API
 string anywhere in the datasets must reach that date. It checks neither content
 hashes nor each dataset individually and does not wait for sync.
 
-`inspect` returns the existing webhook JSON shape: tab structure and, with
+`inspect` returns tab structure and, with
 `--cells`, displayed values, formulas, number formats, backgrounds, font weights,
 alignments and wrapping. `--range` selects cell detail; tab extents still describe
 the whole tab. `compare` reads both spreadsheets with cells, matches tabs by name,
@@ -146,9 +140,9 @@ and returns `{ identical, differences }` with per-tab/per-cell fields. Exit code
 0 identical, 1 differences or API error, 2 missing flags. Workbook titles and
 resource ids are ignored; locale, timezone and tab order are compared.
 
-### API parity limits
+### Limits
 
-- Shared-grid and simulated Apps Script parity tests cover every primitive,
+- Grid tests, golden fixtures and an in-memory API cover every primitive,
   first render, re-render, preservation, chart and conditional-rule replacement.
   These are offline tests, not live Google verification.
 - Chart `v_axis_format` has no direct API equivalent. Common options (legend,
@@ -161,26 +155,12 @@ resource ids are ignored; locale, timezone and tab order are compared.
   (only rule type/ranges). Cell formats are user-entered, not evaluated
   conditional-format appearance; theme-color resolution is not included.
 
-### Deprecated, still supported: compile/deploy/webhook
+### API-only breaking change
 
-```sh
-sheet-kit compile --artifacts mpd/out --out generated/apps-script [--timezone TZ]
-sheet-kit deploy --project generated/apps-script --script-id ID [--deployment-id ID]
-sheet-kit publish --artifact DIR --config webhook.json [--expected-latest DATE] [--full] [--profile]
-sheet-kit inspect --config webhook.json [--spreadsheet-id ID] [--sheet NAME] [--range A1] [--cells]
-```
-
-`compile` emits `sheetkit.gs`, `webhook.gs`, `manifest.gs` and `appsscript.json`.
-`deploy` **still uses clasp** and its separate sign-in; reusing `--deployment-id`
-keeps the webhook URL. No Apps Script API deploy was introduced.
-
-Webhook config is `{ "url": "https://script.google.com/macros/s/ID/exec",
-"secret": "…" }`; `--config -` reads stdin. `driveDir` is ignored with a note.
-Publish sends data inline and retains transient HTML/import retries. This legacy
-path still uses the compiled manifest: structure changes require compile/deploy.
-
-For existing callers such as mpd, set **`SHEET_KIT_TRANSPORT=api`** to switch
-publish to the API without changing their `--config -` call; the config is then
-not read. Alternatively remove `--config`. `SHEET_KIT_TRANSPORT=webhook` requires
-`--config`. Inspect prefers the API when given an id and sign-in, otherwise uses
-the supplied webhook config. No browser cookies or private Sheets endpoints.
+There is no compatibility path. Compile, deploy, clasp, webhook publishing and
+webhook inspect have been removed, as have `--config`, `--full` and `--profile`.
+Unknown flags fail before any writes. `SHEET_KIT_TRANSPORT` is no longer read.
+Callers such as mpd must remove those flags and config piping, supply Google
+credentials, and use `publish --artifact DIR` / `inspect --spreadsheet-id ID`.
+The artifact contract remains v1. Existing deployed scripts are not modified or
+deleted by this change; disabling their triggers/deployments is separate work.

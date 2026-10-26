@@ -1,6 +1,6 @@
 ---
 name: core
-description: Render Google Sheets from manifest + data through the Sheets API with sheet-kit. Sign in, validate, publish structure and values, inspect live sheets, and compare copies. Also supports legacy compile/deploy/webhook workflows.
+description: Render Google Sheets from manifest + data through the Sheets API with sheet-kit. Sign in, validate, publish structure and values, inspect live sheets, and compare copies.
 allowed-tools: Bash(sheet-kit:*)
 ---
 
@@ -53,8 +53,7 @@ No Cloud project, OAuth client/client.json, API-enabling steps, or client secret
 
 `publish --artifact DIR` reads **manifest.json and data.json** each time and
 renders into the manifest's spreadsheet id. Structure and data changes both
-take effect on the next publish. **No compile or deploy is needed.** Every API
-render is full; `--full` is accepted for compatibility. Normally four calls for
+take effect on the next publish. Every render is full. Normally four calls for
 the whole workbook, plus one read for preserved columns; large writes chunk.
 
 ## Workflows
@@ -72,19 +71,14 @@ flags. Ignores workbook titles and resource ids; compares tab order, locale,
 timezone, structure and inspect cell fields. It does not compare chart specs,
 dimensions, or full conditional-rule definitions (only type/ranges).
 
-## Legacy migration (deprecated but working)
+## API only
 
-- `publish --config webhook.json` uses the old Apps Script webhook. Config is
-  `{ url, secret }`; `--config -` reads stdin. `driveDir` is ignored with a note;
-  data always travels inline, never via Drive sync.
-- Set `SHEET_KIT_TRANSPORT=api` to migrate an existing `--config` caller without
-  changing its invocation. The webhook config is then ignored (not read).
-- Legacy structure changes still require `compile --artifacts DIR --out project/`
-  then `deploy --project project/ --script-id ID --deployment-id ID`, then publish.
-  **Deploy stays on clasp**, with its separate login. Keep the same deployment
-  id to preserve the webhook URL. API publishing needs none of this.
-- Inspect uses the API with `--spreadsheet-id` and sign-in; `--config` remains
-  the webhook fallback without an id/sign-in. The output shape is unchanged.
+Compile/deploy, clasp and webhook transports are removed, not deprecated.
+`--config`, `--full` and `--profile` are errors; remove them and config piping
+from callers. `SHEET_KIT_TRANSPORT` is no longer read. Publish needs the artifact
+directory and Google sign-in; inspect needs a spreadsheet id and sign-in.
+Do not run old deploy scripts. This CLI does not disable previously deployed
+Apps Scripts or their triggers.
 
 ## Formulas are name-based, resolved per row
 
@@ -100,15 +94,14 @@ row** (`resolveFormula_`), so the manifest never writes A1 and can't drift.
 
 ## Gotchas (the ones no --help confesses)
 
-- **API publish applies structure immediately.** Compile/deploy is only for
-  the deprecated webhook path, whose manifest is embedded.
+- **Publish applies structure immediately** from the manifest on disk.
 - **`--expected-latest` is a local guard**, not a sync handshake: refuse if the
   newest exact `YYYY-MM-DD` value anywhere in the datasets is older. It does not
   validate content or freshness of each dataset separately. Multiple datasets work.
-- **API parity limits:** chart `v_axis_format`, unsupported Google Charts
+- **API limits:** chart `v_axis_format`, unsupported Google Charts
   options, and conditional underline warn and are skipped. Custom dash patterns
   use a preset. Inspect reports user-entered formats, not conditional appearance;
-  theme colors aren't resolved. Offline parity tests are not live Google proof.
+  theme colors aren't resolved. Offline tests are not live Google proof.
 - **`gradient.group_by`** splits a column into independent color scales per
   contiguous run of that column's value — use it for stacked sub-tables that
   otherwise share (and wash out) one scale.

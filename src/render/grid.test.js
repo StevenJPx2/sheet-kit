@@ -1,18 +1,7 @@
-// grid.js is imported directly by the Node renderer and stripped into the Apps
-// Script bundle; these pin the helpers that used to live inside primitive bodies.
+// Pure grid and primitive-layout behaviour.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import vm from "node:vm";
 import { chartLayout_, compareFormula_, gradientPoints_, preserveValues_ } from "./grid.js";
-import { appsScriptCore } from "../utils/compiler.js";
-
-test("the bundle exposes grid helpers as globals with identical behaviour", () => {
-  const sandbox = {};
-  vm.createContext(sandbox);
-  vm.runInContext(appsScriptCore(), sandbox);
-  assert.equal(sandbox.compareFormula_(2, 1, 3), compareFormula_(2, 1, 3));
-  assert.equal(typeof sandbox.chartLayout_, "function");
-});
 
 test("compareFormula_ keeps the original blank-guarded comparison", () => {
   const num = (c) => `IFERROR(VALUE(REGEXREPLACE($${c}3,"[^0-9.\\-]","")),"")`;

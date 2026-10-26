@@ -12,18 +12,16 @@ import { autoResizeRows, dimensionProps, formatCells, gridRange, mergeCells } fr
 //
 // The manifest declares only the per-level STYLES:
 //   headings: { title:{…}, period:{…}, summary:{…}, header:{…} }
-// core.js records which sheet rows are sections/headers; this primitive styles
+// grid.js records which sheet rows are sections/headers; this primitive styles
 // them. Positions come from data; styles come from the manifest.
 export default definePrimitive({
   name: "heading",
-  region: "format",
-  inputs: function (ctx) { return { styles: ctx.spec.headings || null, w: ctx.width, sections: ctx.sections, headers: ctx.headers }; },
   field: "headings",
   order: 15,
   requests(ctx) {
     const styles = ctx.spec.headings || {};
     const out = [];
-    /** Mirror of render's apply(); `wrap` lets __header__ rows force wrapping. */
+    // Repeated column headers wrap even when their cells are not merged.
     const apply = (row, style, wrap) => {
       const range = gridRange(ctx.sheetId, row, 1, 1, ctx.width);
       const merged = style.merge !== false;
@@ -41,36 +39,5 @@ export default definePrimitive({
       out.push(autoResizeRows(ctx.sheetId, h.row, 1));
     }
     return out;
-  },
-  render: function (ctx) {
-    var styles = ctx.spec.headings || {};
-
-    function apply(range, style, row) {
-      var merged = style.merge !== false;
-      if (merged) range.merge();
-      // A merged heading wraps within its cell instead of overflowing across the
-      // row; a non-merged heading keeps its single cell (text may clip).
-      range.setWrap(merged);
-      if (style.bold) range.setFontWeight("bold");
-      if (style.italic) range.setFontStyle("italic");
-      if (style.background) range.setBackground(style.background);
-      if (style.font_color) range.setFontColor(style.font_color);
-      if (style.font_size) range.setFontSize(style.font_size);
-      if (style.align) range.setHorizontalAlignment(style.align);
-      if (style.row_height) ctx.sheet.setRowHeight(row, style.row_height);
-    }
-
-    (ctx.sections || []).forEach(function (s) {
-      var style = styles[s.level] || styles.section || { bold: true, background: "#eef5fb" };
-      apply(ctx.sheet.getRange(s.row, 1, 1, ctx.width), style, s.row);
-    });
-
-    (ctx.headers || []).forEach(function (h) {
-      var style = styles.header || { bold: true, background: "#e8eef2", merge: false };
-      var range = ctx.sheet.getRange(h.row, 1, 1, ctx.width);
-      apply(range, style, h.row);
-      range.setWrap(true);
-      ctx.sheet.autoResizeRows(h.row, 1);
-    });
   },
 });

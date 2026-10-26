@@ -6,7 +6,7 @@
 sheet-kit validate --manifest M.json [--data D.json]
 sheet-kit auth login [--account EMAIL] [--expect-domain D] [--no-browser] [--paste]
 sheet-kit auth status | export-env | logout
-sheet-kit publish  --artifact DIR [--expected-latest DATE] [--full]
+sheet-kit publish  --artifact DIR [--expected-latest DATE]
 sheet-kit inspect  --spreadsheet-id ID [--sheet NAME] [--range A1] [--cells]
 sheet-kit compare  --spreadsheet-id A --against B [--sheet NAME]
 sheet-kit skills get core [--full]
@@ -14,8 +14,8 @@ sheet-kit version
 ```
 
 `--artifact` takes a directory containing `manifest.json` + `data.json`.
-API publish applies both structure and data immediately; always full, including
-when `--full` is omitted. `--expected-latest YYYY-MM-DD` locally rejects data
+Publish applies both structure and data immediately; always full.
+`--expected-latest YYYY-MM-DD` locally rejects data
 whose newest exact ISO date value (across all datasets) is older or absent.
 This is not a content hash or a per-dataset freshness check.
 
@@ -56,32 +56,13 @@ It does not compare charts, dimensions, notes, protections or full conditional
 rules. Formats are user-entered, not evaluated conditional appearance, and theme
 colors are not resolved. Both commands are read-only.
 
-## Deprecated webhook commands and config
+## Removed commands and flags
 
-```sh
-sheet-kit compile --artifacts DIR --out DIR [--timezone TZ]
-sheet-kit deploy --project DIR [--script-id ID] [--deployment-id ID] [--description TEXT]
-sheet-kit publish --artifact DIR --config webhook.json [--expected-latest DATE] [--full] [--profile]
-sheet-kit inspect --config webhook.json [--spreadsheet-id ID] [--sheet NAME] [--range A1] [--cells]
-```
-
-`--config -` reads stdin. `--artifacts` takes a directory of artifact folders.
-Legacy config:
-
-```json
-{ "url": "https://script.google.com/macros/s/<deploymentId>/exec",
-  "secret": "<raw webhook secret>" }
-```
-`publish` POSTs `{token, dataInline, force, profile}`; Apps Script hashes the
-token against `SHEETKIT_SECRET_HASH`. `driveDir` is ignored with a note. There
-is no staging, Drive sync wait, or stale-file handshake. HTML/import retries
-remain. `--full` sets `force`; `--profile` is webhook-only (API warns/ignores).
-
-`SHEET_KIT_TRANSPORT=api` switches even `--config -` callers to API publishing;
-config is not read. No env override: with config = webhook, without = API.
-`SHEET_KIT_TRANSPORT=webhook` requires config. Inspect prefers API with an id
-and sign-in; otherwise config remains a fallback. Legacy publishing uses the
-compiled manifest, so structure changes still need compile/deploy.
+Only the Sheets API is supported. Compile/deploy and webhook config/transport
+are removed. `--config`, `--full` and `--profile` fail as unknown flags before
+any writes. `SHEET_KIT_TRANSPORT` is not read. Callers must use the commands
+above without config piping; credentials come from Google sign-in, not a shared
+webhook secret. Previously deployed Apps Scripts/triggers remain untouched.
 
 ## Manifest shape (contract v1)
 
@@ -116,9 +97,8 @@ compiled manifest, so structure changes still need compile/deploy.
 }
 ```
 
-New tabs are created at the end of the tab bar. API renders always reapply
-`placement`. Legacy incremental renders can leave manual moves/unhides intact
-until placement changes or a full render occurs.
+New tabs are created at the end of the tab bar. Every render reapplies
+`placement`; omitting `hidden` preserves a manual hide.
 
 Gradient `kind`: `number` | `percent` | `percentile` | `min` | `max`, with
 independent `min_kind`/`mid_kind`/`max_kind`. Heading rows travel in `data.json`
@@ -127,25 +107,12 @@ their positions come from data, their styles from `headings`.
 
 API chart limits: `v_axis_format` has no direct equivalent, unsupported Charts
 options warn/skip, and custom dash patterns use a preset. Conditional underline
-warns/skips. Use hex colors or supported basic names. Header/formula/grid logic
-is shared with Apps Script; offline parity tests cover all primitives.
-
-## Legacy deploy (clasp)
-
-```bash
-sheet-kit compile --artifacts ./out --out ./project
-sheet-kit deploy  --project ./project --script-id <ID> --deployment-id <ID>
-```
-`deploy` writes `.clasp.json`, `clasp push --force`, then `clasp deploy`
-(re)using `--deployment-id` so the webhook URL keeps serving the new code.
-Clasp retains its separate login; sheet-kit auth does not authenticate clasp.
-First generic deploy: set the `SHEETKIT_SECRET_HASH` script property (sha256 of
-the webhook secret).
+warns/skips. Use hex colors or supported basic names. Golden request/sheet tests
+cover all primitives; simulation is not live Google verification.
 
 ## Runtime layout
 
-`src/cli/cli.js` → `src/cli/{publish,inspect,compare,deploy,skills}.js`,
-`src/google/{auth,http,sheets}.js`, `src/render/{render,requests}.js`,
-`src/runtime/grid.js` (shared pure logic), `src/utils/{compiler,validate,data}.js`,
-`src/runtime/{core,webhook}.js` (legacy bundle), `src/primitives/*.js`
-(validation, Node `requests(ctx)`, legacy `render(ctx)`).
+`src/cli/cli.js` → `src/cli/{publish,inspect,compare,skills}.js`,
+`src/google/{auth,http,sheets}.js`, `src/render/{grid,render,requests}.js`,
+`src/utils/{define-primitive,validate,data}.js`, `src/primitives/*.js`
+(validation and `requests(ctx)`). See each directory's README for details.

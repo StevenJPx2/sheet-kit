@@ -1,6 +1,5 @@
-// Sheets API v4 request builders for the primitives' `requests(ctx)`. Ranges
-// take the same 1-based (row, col, numRows, numCols) arguments as Apps Script's
-// sheet.getRange, so each primitive's two behaviours read side by side.
+// Sheets API v4 request builders. Public row/column arguments are 1-based;
+// GridRanges in emitted requests are 0-based and end-exclusive.
 
 /**
  * @typedef {{ sheetId: number, startRowIndex?: number, endRowIndex?: number, startColumnIndex?: number, endColumnIndex?: number }} GridRange
@@ -64,7 +63,7 @@ export function numberFormat(pattern) {
 }
 
 /**
- * @typedef {Object} Style  a subset of Apps Script Range setters, as data
+ * @typedef {Object} Style  cell format properties
  * @property {boolean} [bold]
  * @property {boolean} [italic]
  * @property {string}  [background]
@@ -77,7 +76,7 @@ export function numberFormat(pattern) {
 
 /**
  * One repeatCell that applies `style` to `range`, touching only the fields it
- * sets (like the matching sequence of Apps Script setters). Null when empty.
+ * sets. Null when empty.
  * @param {GridRange} range
  * @param {Style} style
  * @returns {Request | null}
