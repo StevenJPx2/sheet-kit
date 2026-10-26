@@ -1,15 +1,15 @@
 /**
  * webhook — generic Apps Script web app for sheet-kit.
  *
- * Domain-agnostic transport. Authenticates a token, resolves the manifest
- * (embedded by `sheet-kit compile`, else read from Drive), reads the data
- * artifact, and renders every tab through renderTab (runtime/core.js). No
- * per-report functions — a new sheet needs no webhook change.
+ * Domain-agnostic transport. Authenticates a token, uses the manifest embedded
+ * by `sheet-kit compile`, parses the data sent inline, and renders every tab
+ * through renderTab (runtime/core.js). No per-report functions — a new sheet
+ * needs no webhook change.
  *
- * POST { token, manifest?, data?, expectedLatest?, expectedHash?, force?, action? }
+ * POST { token, dataInline?, force?, profile?, action? }
  *   token          — sha256 must match Script Property SHEETKIT_SECRET_HASH
+ *   dataInline     — the data.json bytes to render (required unless inspecting)
  *   action=inspect — return spreadsheet structure (+ cells) instead of rendering
- *   expectedLatest — staleness handshake: reject if the data is older
  *   force          — skip the incremental (values-only) path; full re-render
  *   profile        — return per-primitive render timings (adds flush latency)
  */
@@ -30,33 +30,14 @@ function doPost(event) {
       return jsonResponse_({ ok: true, spreadsheet: inspectSpreadsheet_(inspectId, payload) });
     }
 
-    // Data transport. Preferred: the artifact bytes inline in the POST body
-    // (dataInline) — no Drive staging, no cloud-sync wait, and the staleness
-    // handshake is moot because we render exactly the bytes we were sent.
-    // Fallback: read a staged file from Drive by name (legacy callers).
-    var inline = payload.dataInline != null;
-    var raw = inline ? String(payload.dataInline) : readRawByName_(String(payload.data || 'data.json'));
-    var data = JSON.parse(raw);
+    // The data travels inline: we render exactly the bytes we were sent.
+    if (payload.dataInline == null) {
+      return jsonResponse_({ ok: false, error: 'dataInline missing (Drive-staged data is no longer read; upgrade sheet-kit)' });
+    }
+    var data = JSON.parse(String(payload.dataInline));
 
     if (manifest.contract_version !== 1 || data.contract_version !== 1) {
       return jsonResponse_({ ok: false, error: 'unsupported contract_version' });
-    }
-
-    if (!inline) {
-      // Staleness handshake for the Drive path. Prefer a content hash: the CLI
-      // sends the sha256 of the exact bytes it staged, so we only render once
-      // Drive has synced that precise file. Fall back to the max-date check.
-      var expectedDataHash = String(payload.expectedHash || '');
-      if (expectedDataHash) {
-        if (sha256_(raw) !== expectedDataHash) {
-          return jsonResponse_({ ok: false, stale: true, latest: dataLatestDate_(data), reason: 'hash' });
-        }
-      } else {
-        var expectedLatest = String(payload.expectedLatest || '');
-        if (expectedLatest && dataLatestDate_(data) < expectedLatest) {
-          return jsonResponse_({ ok: false, stale: true, latest: dataLatestDate_(data) });
-        }
-      }
     }
 
     var ss = SpreadsheetApp.openById(manifest.spreadsheet_id);
@@ -133,31 +114,6 @@ function inspectSpreadsheet_(spreadsheetId, payload) {
     timezone: ss.getSpreadsheetTimeZone(),
     sheets: sheets
   };
-}
-
-/** Scan every string cell that looks like a date; return the max. */
-function dataLatestDate_(data) {
-  var latest = '';
-  Object.keys(data.datasets || {}).forEach(function (key) {
-    (data.datasets[key] || []).forEach(function (row) {
-      Object.keys(row).forEach(function (field) {
-        var v = String(row[field] || '');
-        if (/^\d{4}-\d{2}-\d{2}$/.test(v) && v > latest) latest = v;
-      });
-    });
-  });
-  return latest;
-}
-
-function readRawByName_(name) {
-  var files = DriveApp.getFilesByName(name);
-  var newest = null;
-  while (files.hasNext()) {
-    var f = files.next();
-    if (!newest || f.getLastUpdated() > newest.getLastUpdated()) newest = f;
-  }
-  if (!newest) throw new Error('artifact not found by name: ' + name);
-  return newest.getBlob().getDataAsString();
 }
 
 function sha256_(value) {

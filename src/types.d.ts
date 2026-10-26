@@ -106,7 +106,6 @@ declare global {
   // Apps Script services (loosely typed; runtime-only).
   var SpreadsheetApp: any;
   var Charts: any;
-  var DriveApp: any;
   var Utilities: any;
   var ContentService: any;
   var PropertiesService: any;
