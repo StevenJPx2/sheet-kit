@@ -31,6 +31,8 @@ test("charts excluded when no tab uses them, included when one does", () => {
   assert.ok(!gs1.includes("sk_chart_"), "sk_chart_ must not be emitted");
   assert.ok(gs1.includes("sk_gradient_"), "sk_gradient_ must be emitted");
   assert.ok(gs1.includes("var SK_RENDER_STEPS = ["), "dispatch list generated");
+  assert.ok(gs1.includes("function gradientPoints_("), "shared grid helpers are bundled");
+  assert.ok(!/^export /m.test(gs1), "ES module exports are stripped for Apps Script");
 
   const withChart = scaffold({ name: "T", data_key: "t", columns: gridColumns, charts: [{ type: "line", x: "Date", series: ["RPV"] }] });
   const r2 = compileAppsScript(withChart.artifacts, withChart.out);

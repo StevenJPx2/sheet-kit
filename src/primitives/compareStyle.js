@@ -5,8 +5,8 @@ import { definePrimitive } from "../utils/define-primitive.js";
 // everything but digits/./- before comparing, and skips rows where either side
 // isn't numeric (labels, blanks). Conditional-format based, so it stays right on
 // re-render. style: { bold, italic, underline, strikethrough, font_color,
-// background } — defaults to { bold: true }. (Only render() is serialised into
-// the bundle, so helpers live inside it.)
+// background } — defaults to { bold: true }. The condition formula comes from
+// compareFormula_ (runtime/grid.js), shared with the Sheets API renderer.
 const STYLE_KEYS = new Set(["bold", "italic", "underline", "strikethrough", "font_color", "background"]);
 
 export default definePrimitive({
@@ -27,34 +27,14 @@ export default definePrimitive({
     return "";
   },
   render: function (ctx) {
-    var letter = function (index) {
-      var s = "";
-      while (index > 0) {
-        var m = (index - 1) % 26;
-        s = String.fromCharCode(65 + m) + s;
-        index = (index - m - 1) / 26;
-      }
-      return s;
-    };
     (ctx.spec.compare_style || []).forEach(function (p) {
       var a = columnIndex_(ctx.columns, p.a);
       var b = columnIndex_(ctx.columns, p.b);
       if (a <= 0 || b <= 0 || ctx.dataRowCount <= 0) return;
       var style = p.style || { bold: true };
-      var row = ctx.firstDataRow;
-      var num = function (col) {
-        return 'IFERROR(VALUE(REGEXREPLACE($' + letter(col) + row + ',"[^0-9.\\-]","")),"")';
-      };
-      var formula = function (self, other) {
-        var s = num(self), o = num(other);
-        // Guard blanks: VALUE("") is 0 in Sheets, so an empty peer would look
-        // like a real 0 and wrongly "win". Require both cells non-empty.
-        var a = "$" + letter(self) + row, b = "$" + letter(other) + row;
-        return "=AND(" + a + '<>"",' + b + '<>"",ISNUMBER(' + s + "),ISNUMBER(" + o + ")," + s + ">" + o + ")";
-      };
       [[a, b], [b, a]].forEach(function (pair) {
         var range = ctx.sheet.getRange(ctx.firstDataRow, pair[0], ctx.dataRowCount, 1);
-        var rule = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(formula(pair[0], pair[1]));
+        var rule = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(compareFormula_(pair[0], pair[1], ctx.firstDataRow));
         if (style.bold) rule.setBold(true);
         if (style.italic) rule.setItalic(true);
         if (style.underline) rule.setUnderline(true);

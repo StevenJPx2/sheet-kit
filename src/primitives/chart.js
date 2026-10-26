@@ -53,20 +53,10 @@ export default definePrimitive({
     }
 
     charts.forEach(function (c) {
-      var headerRow = ctx.headerRows;
-      if (c.data_from_last_header) {
-        if (!(ctx.headers || []).length) return;
-        headerRow = ctx.headers[ctx.headers.length - 1].row;
-      }
-      var height = ctx.rows - headerRow + 1;
-      var xColumn = columnIndex_(ctx.columns, c.x);
-      if (xColumn <= 0 || height < 2) return;
+      var layout = chartLayout_(ctx, c);
+      if (!layout) return;
+      var headerRow = layout.headerRow, height = layout.height, cols = layout.cols;
 
-      var cols = [xColumn];
-      (c.series || []).forEach(function (name) {
-        var col = columnIndex_(ctx.columns, name);
-        if (col > 0) cols.push(col);
-      });
       var builder = sheet.newChart().asLineChart();
       cols.forEach(function (col) { builder.addRange(sheet.getRange(headerRow, col, height, 1)); });
 
@@ -77,14 +67,7 @@ export default definePrimitive({
       Object.keys(c.options || {}).forEach(function (k) { builder.setOption(k, c.options[k]); });
       builder.setOption("width", c.width || 920).setOption("height", c.height || 400);
 
-      var pos = c.position || { row: 4, col: 0 };
-      var row = pos.row;
-      if (c.anchor_section) {
-        var anchor = (ctx.sections || []).filter(function (s) { return s.level === c.anchor_section; })[0];
-        if (!anchor) return;
-        row = anchor.row;
-      }
-      builder.setPosition(row, pos.col, 0, 0);
+      builder.setPosition(layout.row, layout.col, 0, 0);
 
       if (c.hide_data) {
         builder.setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_BOTH);

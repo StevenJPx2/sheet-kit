@@ -28,32 +28,21 @@ export default definePrimitive({
     return "";
   },
   render: function (ctx) {
-    var INTERP = { number: "NUMBER", percent: "PERCENT", percentile: "PERCENTILE", min: "MIN", max: "MAX" };
     (ctx.spec.gradients || []).forEach(function (g) {
       var column = columnIndex_(ctx.columns, g.column);
       if (column <= 0) return;
 
       var runs = gradientRuns_(ctx.values, ctx.columns, ctx.firstDataRow, ctx.dataRowCount, g.group_by);
+      var p = gradientPoints_(g);
       var rule = SpreadsheetApp.newConditionalFormatRule();
-      var minInterp = INTERP[g.min_kind || g.kind] || "PERCENTILE";
-      var midInterp = INTERP[g.mid_kind || "number"] || "NUMBER";
-      var maxInterp = INTERP[g.max_kind || g.kind] || "PERCENTILE";
 
       // MIN/MAX endpoints auto-anchor to the range's actual extremes (linear, not
       // rank-based) — use the no-value setters; NUMBER/PERCENT/PERCENTILE take a value.
-      if ((g.min_kind || g.kind) === "min") {
-        rule.setGradientMinpoint(g.min_color || "#ea4335");
-      } else {
-        rule.setGradientMinpointWithValue(g.min_color || "#ea4335", SpreadsheetApp.InterpolationType[minInterp], String(g.min_value != null ? g.min_value : 2));
-      }
-      if (g.mid_color != null) {
-        rule.setGradientMidpointWithValue(g.mid_color, SpreadsheetApp.InterpolationType[midInterp], String(g.mid_value != null ? g.mid_value : 0));
-      }
-      if ((g.max_kind || g.kind) === "max") {
-        rule.setGradientMaxpoint(g.max_color || "#34a853");
-      } else {
-        rule.setGradientMaxpointWithValue(g.max_color || "#34a853", SpreadsheetApp.InterpolationType[maxInterp], String(g.max_value != null ? g.max_value : 98));
-      }
+      if (p.min.value == null) rule.setGradientMinpoint(p.min.color);
+      else rule.setGradientMinpointWithValue(p.min.color, SpreadsheetApp.InterpolationType[p.min.type], p.min.value);
+      if (p.mid) rule.setGradientMidpointWithValue(p.mid.color, SpreadsheetApp.InterpolationType[p.mid.type], p.mid.value);
+      if (p.max.value == null) rule.setGradientMaxpoint(p.max.color);
+      else rule.setGradientMaxpointWithValue(p.max.color, SpreadsheetApp.InterpolationType[p.max.type], p.max.value);
 
       ctx.cfRules.push(rule.setRanges(runs.map(function (run) {
         return ctx.sheet.getRange(run.firstRow, column, run.rowCount, 1);

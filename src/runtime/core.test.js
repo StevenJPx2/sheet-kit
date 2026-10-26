@@ -1,17 +1,14 @@
 // The runtime core is authored as an Apps Script script (globals, no exports).
 // We eval it in a vm sandbox to unit-test the pure helpers — the same source the
-// compiler emits into the bundle.
+// compiler emits into the bundle (grid.js with exports stripped + core.js).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import vm from "node:vm";
+import { appsScriptCore } from "../utils/compiler.js";
 
-const here = dirname(fileURLToPath(import.meta.url));
 const sandbox = {};
 vm.createContext(sandbox);
-vm.runInContext(readFileSync(join(here, "core.js"), "utf8"), sandbox);
+vm.runInContext(appsScriptCore(), sandbox);
 
 test("columnName_ produces A1 letters", () => {
   assert.equal(sandbox.columnName_(1), "A");
