@@ -1,78 +1,48 @@
-// sheet-kit's own Google sign-in, mirroring doc-kit: an installed-app OAuth
-// client (client.json from Cloud Console), loopback redirect with PKCE, and a
-// refresh token stored under the config dir. SHEET_KIT_ACCESS_TOKEN
-// short-circuits all of it for one-off use. Without a client of its own,
-// sheet-kit reuses doc-kit's client.json, so one Desktop client serves both.
-import { createHash, randomBytes } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+// sheet-kit's Google sign-in, copied from doc-kit's design. It goes through the
+// login service Google runs for its Gemini CLI Workspace extension (the same one
+// the Google Workspace MCP uses), so no OAuth client of our own is needed: the
+// service holds the client secret, swaps the browser's code for tokens, and
+// renews access tokens.
+//
+//   login:   browser → Google consent (extension's client id, redirect to the
+//            service) → service exchanges the code → redirects to our loopback
+//            port with the tokens. On a machine without a browser, `--paste`
+//            takes the credentials JSON the service shows instead.
+//   refresh: POST {service}/refreshToken { refresh_token }.
+//
+// Credentials, first match wins: SHEET_KIT_ACCESS_TOKEN (one-off), the token
+// file in the config dir, SHEET_KIT_REFRESH_TOKEN (a cron host's secret store,
+// no files needed).
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { googleJson } from "./http.js";
 
-// deploy: script.projects (updateContent, versions.create) + script.deployments.
-// inspect: spreadsheets.readonly. openid + email: the account's address for
-// `auth status` and --expect-domain.
-export const SCOPES = [
-  "https://www.googleapis.com/auth/script.projects",
-  "https://www.googleapis.com/auth/script.deployments",
-  "https://www.googleapis.com/auth/spreadsheets.readonly",
-  "openid",
-  "email",
-];
+/** The Drive scope covers Sheets reads and writes (and whoami via Drive `about`). */
+export const SCOPES = ["https://www.googleapis.com/auth/drive"];
+export const CLIENT_ID = process.env.SHEET_KIT_CLIENT_ID || "338689075775-o75k922vn5fdl18qergr96rp8g63e4d7.apps.googleusercontent.com";
+export const LOGIN_SERVICE = (process.env.SHEET_KIT_LOGIN_SERVICE || "https://google-workspace-extension.geminicli.com").replace(/\/$/, "");
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
-const USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
+const ABOUT_URL = "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)";
 const EXPIRY_MARGIN_MS = 60_000;
 const LOGIN_TIMEOUT_MS = 5 * 60_000;
 
 /**
- * @typedef {{ client_id: string, client_secret: string }} Client
  * @typedef {{ access_token: string, refresh_token: string, expiry: number, scope: string, email: string }} StoredToken
+ * @typedef {{ access_token: string, refresh_token: string, expiry_date: number, scope: string }} Tokens
  */
 
 export function configDir() {
   return process.env.SHEET_KIT_CONFIG_DIR || join(homedir(), ".config", "sheet-kit");
 }
-function docKitConfigDir() {
-  return process.env.DOC_KIT_CONFIG_DIR || join(homedir(), ".config", "doc-kit");
-}
-const ownClientPath = () => join(configDir(), "client.json");
 const tokenPath = () => join(configDir(), "token.json");
-
-/** sheet-kit's client.json if present, else doc-kit's, else sheet-kit's (missing). */
-export function clientPath() {
-  const own = ownClientPath();
-  if (existsSync(own)) return own;
-  const docKit = join(docKitConfigDir(), "client.json");
-  return existsSync(docKit) ? docKit : own;
-}
-
-/**
- * Read an OAuth client file as downloaded from Cloud Console ({ installed: {...} }).
- * @param {string} [path]
- * @returns {Client}
- */
-export function loadClient(path = clientPath()) {
-  if (!existsSync(path)) {
-    throw new Error(`no OAuth client at ${path}. Run \`sheet-kit auth login --client <client_secret.json>\` (see README: "Google sign-in").`);
-  }
-  const raw = JSON.parse(readFileSync(path, "utf8"));
-  const c = raw.installed ?? raw.web ?? raw;
-  if (!c.client_id || !c.client_secret) throw new Error(`${path} has no client_id/client_secret`);
-  return { client_id: c.client_id, client_secret: c.client_secret };
-}
 
 /** @returns {StoredToken | null} */
 export function loadToken() {
   if (!existsSync(tokenPath())) return null;
   return JSON.parse(readFileSync(tokenPath(), "utf8"));
-}
-
-/** True when a token is available without an interactive sign-in. */
-export function isSignedIn() {
-  return Boolean(process.env.SHEET_KIT_ACCESS_TOKEN) || existsSync(tokenPath());
 }
 
 /** @param {StoredToken} t */
@@ -81,23 +51,47 @@ function saveToken(t) {
   writeFileSync(tokenPath(), JSON.stringify(t, null, 2) + "\n", { mode: 0o600 });
 }
 
+/** Where the active sign-in comes from, or "" when there is none. */
+export function credentialSource() {
+  if (process.env.SHEET_KIT_ACCESS_TOKEN) return "SHEET_KIT_ACCESS_TOKEN";
+  if (loadToken()) return `config: ${configDir()}`;
+  if (process.env.SHEET_KIT_REFRESH_TOKEN) return "SHEET_KIT_REFRESH_TOKEN";
+  return "";
+}
+
+/** True when a token is available without an interactive sign-in. */
+export function isSignedIn() {
+  return credentialSource() !== "";
+}
+
 /**
- * @param {Record<string, string>} params
- * @param {typeof fetch} fetchImpl
+ * Renew an access token through the login service.
+ * @param {string} refreshToken
+ * @param {typeof fetch} [fetchImpl]
+ * @returns {Promise<{ access_token: string, expiry_date: number, scope?: string }>}
  */
-async function tokenRequest(params, fetchImpl) {
-  const res = await fetchImpl(TOKEN_URL, {
+export async function refreshAccessToken(refreshToken, fetchImpl = fetch) {
+  const res = await fetchImpl(`${LOGIN_SERVICE}/refreshToken`, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(params).toString(),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
   });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`token endpoint ${res.status}: ${body.error_description || body.error || "unknown error"}`);
+  const text = await res.text();
+  /** @type {any} */
+  let body = {};
+  try { body = JSON.parse(text); } catch {}
+  if (!res.ok || !body.access_token) {
+    if (body.error === "invalid_grant") {
+      throw new Error("the saved Google sign-in was revoked or has expired. Run `sheet-kit auth login` again (and update SHEET_KIT_REFRESH_TOKEN on hosts that use it).");
+    }
+    throw new Error(`token refresh failed (HTTP ${res.status}): ${body.error_description || body.error || text.slice(0, 200) || "no details"}`);
+  }
   return body;
 }
 
 /**
- * A valid access token: from SHEET_KIT_ACCESS_TOKEN, the stored token, or a refresh.
+ * A valid access token: SHEET_KIT_ACCESS_TOKEN, the stored token (renewed when
+ * it's about to expire), or SHEET_KIT_REFRESH_TOKEN.
  * @param {{ fetchImpl?: typeof fetch, now?: () => number }} [deps]
  */
 export async function getAccessToken({ fetchImpl = fetch, now = Date.now } = {}) {
@@ -105,29 +99,32 @@ export async function getAccessToken({ fetchImpl = fetch, now = Date.now } = {})
   if (env) return env;
 
   const t = loadToken();
-  if (!t) throw new Error("not signed in. Run `sheet-kit auth login`.");
+  if (!t) {
+    const refresh = process.env.SHEET_KIT_REFRESH_TOKEN;
+    if (refresh) return (await refreshAccessToken(refresh, fetchImpl)).access_token;
+    throw new Error("not signed in. Run `sheet-kit auth login` (or set SHEET_KIT_REFRESH_TOKEN).");
+  }
   if (t.expiry - EXPIRY_MARGIN_MS > now()) return t.access_token;
 
-  const client = loadClient();
-  const r = await tokenRequest(
-    { grant_type: "refresh_token", refresh_token: t.refresh_token, client_id: client.client_id, client_secret: client.client_secret },
-    fetchImpl,
-  );
-  const next = { ...t, access_token: r.access_token, expiry: now() + r.expires_in * 1000, scope: r.scope ?? t.scope };
+  const r = await refreshAccessToken(t.refresh_token, fetchImpl);
+  const next = { ...t, access_token: r.access_token, expiry: r.expiry_date, scope: r.scope ?? t.scope };
   saveToken(next);
   return next.access_token;
 }
 
 /**
- * The signed-in account's email address.
+ * The signed-in account's email address (Drive `about`, covered by the scope).
  * @param {string} token
  * @param {typeof fetch} [fetchImpl]
  * @returns {Promise<string>}
  */
 export async function whoami(token, fetchImpl = fetch) {
-  const info = await googleJson(token, "GET", USERINFO_URL, undefined, fetchImpl);
-  if (!info.email) throw new Error("userinfo returned no email; sign in again with `sheet-kit auth login`");
-  return String(info.email);
+  const res = await fetchImpl(ABOUT_URL, { headers: { Authorization: `Bearer ${token}` } });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`whoami: HTTP ${res.status}: ${text.slice(0, 200)}`);
+  const email = JSON.parse(text).user?.emailAddress;
+  if (!email) throw new Error("whoami: Google returned no account email");
+  return String(email);
 }
 
 /** @param {string} email @param {string} [domain] */
@@ -138,118 +135,149 @@ export function checkDomain(email, domain) {
 }
 
 /**
- * Wait for Google's redirect to the loopback server; resolves the auth code.
- * @param {import("node:http").Server} server
- * @param {string} redirectUri
- * @param {string} state
- * @returns {Promise<string>}
+ * The consent URL. `uri` is where the service sends the tokens; without it the
+ * service shows them on a page for pasting (`manual`).
+ * @param {{ uri?: string, csrf: string, account?: string, expectDomain?: string }} o
  */
-function awaitRedirect(server, redirectUri, state) {
+export function authUrl({ uri, csrf, account, expectDomain }) {
+  const state = Buffer.from(JSON.stringify({ uri, manual: !uri, csrf })).toString("base64");
+  const url = new URL(AUTH_URL);
+  url.search = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: LOGIN_SERVICE,
+    response_type: "code",
+    scope: SCOPES.join(" "),
+    access_type: "offline",
+    prompt: "consent",
+    state,
+    ...(account ? { login_hint: account } : {}),
+    ...(expectDomain ? { hd: expectDomain.replace(/^@/, "") } : {}),
+  }).toString();
+  return url.toString();
+}
+
+/**
+ * Tokens from the service's loopback redirect, after checking the CSRF value.
+ * @param {URLSearchParams} q
+ * @param {string} csrf
+ * @returns {Tokens}
+ */
+export function tokensFromRedirect(q, csrf) {
+  if (q.get("state") !== csrf) throw new Error("sign-in state mismatch");
+  if (q.get("error")) throw new Error(`Google sign-in error: ${q.get("error")}`);
+  const access_token = q.get("access_token");
+  const refresh_token = q.get("refresh_token");
+  const expiry_date = Number(q.get("expiry_date"));
+  if (!access_token || !expiry_date) throw new Error("sign-in failed: the login service sent no tokens");
+  if (!refresh_token) throw new Error("Google returned no refresh token; run `sheet-kit auth logout` and sign in again");
+  return { access_token, refresh_token, expiry_date, scope: q.get("scope") ?? SCOPES.join(" ") };
+}
+
+/**
+ * Tokens from the credentials JSON the service shows in manual mode.
+ * @param {string} text
+ * @returns {Tokens}
+ */
+export function tokensFromPaste(text) {
+  /** @type {any} */
+  let j;
+  try { j = JSON.parse(text); } catch { throw new Error("that isn't the credentials JSON from the sign-in page"); }
+  if (!j.access_token || !j.refresh_token || !j.expiry_date) throw new Error("the pasted JSON has no access_token, refresh_token or expiry_date");
+  return { access_token: j.access_token, refresh_token: j.refresh_token, expiry_date: Number(j.expiry_date), scope: j.scope ?? SCOPES.join(" ") };
+}
+
+/** @param {string} token @param {typeof fetch} fetchImpl */
+async function revoke(token, fetchImpl) {
+  await fetchImpl(`${REVOKE_URL}?token=${encodeURIComponent(token)}`, { method: "POST" }).catch(() => {});
+}
+
+/**
+ * Store the tokens unless the account is outside the expected domain, in which
+ * case the grant is revoked.
+ * @param {Tokens} tokens
+ * @param {string | undefined} expectDomain
+ * @param {typeof fetch} fetchImpl
+ */
+async function storeTokens(tokens, expectDomain, fetchImpl) {
+  const email = await whoami(tokens.access_token, fetchImpl);
+  const domainErr = checkDomain(email, expectDomain);
+  if (domainErr) {
+    await revoke(tokens.refresh_token, fetchImpl);
+    throw new Error(`${domainErr}; token discarded`);
+  }
+  saveToken({ access_token: tokens.access_token, refresh_token: tokens.refresh_token, expiry: tokens.expiry_date, scope: tokens.scope, email });
+  return email;
+}
+
+/**
+ * Wait for the login service's redirect to our loopback port.
+ * @param {import("node:http").Server} server
+ * @param {string} uri
+ * @param {string} csrf
+ * @returns {Promise<Tokens>}
+ */
+function awaitTokens(server, uri, csrf) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("sign-in timed out after 5 minutes")), LOGIN_TIMEOUT_MS);
     server.on("request", (req, res) => {
-      const q = new URL(req.url ?? "/", redirectUri).searchParams;
-      if (!q.has("code") && !q.has("error")) { res.writeHead(404).end(); return; }
-      const ok = q.get("state") === state && q.has("code");
-      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-      res.end(ok ? "sheet-kit is signed in. You can close this tab." : "sheet-kit sign-in failed. Check the terminal.");
+      const u = new URL(req.url ?? "/", uri);
+      if (u.pathname !== "/oauth2callback") { res.writeHead(404).end(); return; }
       clearTimeout(timer);
-      if (q.get("state") !== state) reject(new Error("sign-in state mismatch"));
-      else if (q.has("error")) reject(new Error(`Google sign-in error: ${q.get("error")}`));
-      else resolve(/** @type {string} */ (q.get("code")));
+      try {
+        const t = tokensFromRedirect(u.searchParams, csrf);
+        res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }).end("sheet-kit is signed in. You can close this tab.");
+        resolve(t);
+      } catch (e) {
+        res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" }).end("sheet-kit sign-in failed. Check the terminal.");
+        reject(e);
+      }
     });
   });
 }
 
 /**
- * Interactive sign-in. Opens the consent page, waits for the loopback redirect,
- * and stores the refresh token. Refuses to store a token for the wrong domain.
- * @param {{
- *   client?: string, account?: string, expectDomain?: string,
- *   openUrl?: (url: string) => void, log?: (msg: string) => void,
- * }} opts
+ * Interactive sign-in through the browser and a loopback port.
+ * @param {{ account?: string, expectDomain?: string, openUrl?: (url: string) => void, log?: (msg: string) => void, fetchImpl?: typeof fetch }} opts
  */
 export async function login(opts) {
   const log = opts.log ?? (() => {});
-  if (opts.client) {
-    loadClient(opts.client);
-    mkdirSync(configDir(), { recursive: true, mode: 0o700 });
-    copyFileSync(opts.client, ownClientPath());
-  }
-  const path = clientPath();
-  const client = loadClient(path);
-  if (path !== ownClientPath()) log(`Using doc-kit's OAuth client (${path}).`);
-
-  const verifier = randomBytes(32).toString("base64url");
-  const challenge = createHash("sha256").update(verifier).digest("base64url");
-  const state = randomBytes(16).toString("hex");
+  const csrf = randomBytes(32).toString("hex");
 
   const server = createServer();
   await new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(undefined)));
   const port = /** @type {import("node:net").AddressInfo} */ (server.address()).port;
-  const redirectUri = `http://127.0.0.1:${port}`;
-
-  const url = new URL(AUTH_URL);
-  url.search = new URLSearchParams({
-    client_id: client.client_id,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: SCOPES.join(" "),
-    code_challenge: challenge,
-    code_challenge_method: "S256",
-    access_type: "offline",
-    prompt: "consent",
-    state,
-    ...(opts.account ? { login_hint: opts.account } : {}),
-    ...(opts.expectDomain ? { hd: opts.expectDomain.replace(/^@/, "") } : {}),
-  }).toString();
+  const uri = `http://127.0.0.1:${port}/oauth2callback`;
+  const url = authUrl({ uri, csrf, account: opts.account, expectDomain: opts.expectDomain });
 
   log(`Opening Google sign-in. If no browser opens, visit:\n${url}`);
-  opts.openUrl?.(url.toString());
+  opts.openUrl?.(url);
 
-  /** @type {string} */
-  let code;
+  let tokens;
   try {
-    code = await awaitRedirect(server, redirectUri, state);
+    tokens = await awaitTokens(server, uri, csrf);
   } finally {
     server.close();
   }
-
-  const r = await tokenRequest(
-    {
-      grant_type: "authorization_code",
-      code,
-      code_verifier: verifier,
-      redirect_uri: redirectUri,
-      client_id: client.client_id,
-      client_secret: client.client_secret,
-    },
-    fetch,
-  );
-  if (!r.refresh_token) throw new Error("Google returned no refresh token; run `sheet-kit auth logout` and sign in again");
-
-  const email = await whoami(r.access_token);
-  const domainErr = checkDomain(email, opts.expectDomain);
-  if (domainErr) {
-    await fetch(`${REVOKE_URL}?token=${encodeURIComponent(r.refresh_token)}`, { method: "POST" }).catch(() => {});
-    throw new Error(`${domainErr}; token discarded`);
-  }
-
-  saveToken({
-    access_token: r.access_token,
-    refresh_token: r.refresh_token,
-    expiry: Date.now() + r.expires_in * 1000,
-    scope: r.scope ?? SCOPES.join(" "),
-    email,
-  });
-  return email;
+  return storeTokens(tokens, opts.expectDomain, opts.fetchImpl ?? fetch);
 }
 
-/** Revoke and delete the stored token. Keeps client.json. */
-export async function logout() {
+/**
+ * Sign-in for machines without a browser: print the URL, then read the
+ * credentials JSON the sign-in page shows.
+ * @param {{ account?: string, expectDomain?: string, readPaste: () => Promise<string>, log?: (msg: string) => void, fetchImpl?: typeof fetch }} opts
+ */
+export async function loginWithPaste(opts) {
+  const csrf = randomBytes(32).toString("hex");
+  const url = authUrl({ csrf, account: opts.account, expectDomain: opts.expectDomain });
+  opts.log?.(`Open this URL in any browser, sign in, then paste the "Credentials JSON" it shows and press Ctrl-D:\n${url}`);
+  return storeTokens(tokensFromPaste(await opts.readPaste()), opts.expectDomain, opts.fetchImpl ?? fetch);
+}
+
+/** Revoke and delete the stored token. @param {typeof fetch} [fetchImpl] */
+export async function logout(fetchImpl = fetch) {
   const t = loadToken();
   if (!t) return false;
-  await fetch(`${REVOKE_URL}?token=${encodeURIComponent(t.refresh_token)}`, { method: "POST" }).catch(() => {});
+  await revoke(t.refresh_token, fetchImpl);
   rmSync(tokenPath(), { force: true });
   return true;
 }

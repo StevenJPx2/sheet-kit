@@ -1,11 +1,15 @@
-// One authenticated JSON call to a Google REST API, with the error body turned
-// into an actionable message (disabled APIs, the Apps Script user setting).
+// One authenticated JSON call to a Google REST API: bounded retries for the
+// quota/transient statuses Google asks clients to back off on (429, 5xx), and
+// the error body turned into one actionable line.
 
-const USER_SETTINGS_URL = "https://script.google.com/home/usersettings";
+const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
+const MAX_ATTEMPTS = 5;
+const MAX_BACKOFF_MS = 32_000;
+const sleep = (/** @type {number} */ ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * @typedef {{ reason?: string, metadata?: Record<string, string> }} ErrorInfo
- * @typedef {{ error?: { code?: number, message?: string, status?: string, details?: ErrorInfo[] } }} ErrorBody
+ * @typedef {{ error?: { code?: number, message?: string, status?: string } }} ErrorBody
+ * @typedef {{ fetchImpl?: typeof fetch, wait?: (ms: number) => Promise<unknown> }} HttpDeps
  */
 
 /**
@@ -13,20 +17,26 @@ const USER_SETTINGS_URL = "https://script.google.com/home/usersettings";
  * @param {string} method
  * @param {string} url
  * @param {unknown} [body]
- * @param {typeof fetch} [fetchImpl]
+ * @param {HttpDeps} [deps]
  * @returns {Promise<any>}
  */
-export async function googleJson(token, method, url, body, fetchImpl = fetch) {
+export async function googleJson(token, method, url, body, { fetchImpl = fetch, wait = sleep } = {}) {
   /** @type {Record<string, string>} */
   const headers = { Authorization: `Bearer ${token}` };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const res = await fetchImpl(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-  const text = await res.text();
-  /** @type {any} */
-  let parsed = {};
-  try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = {}; }
-  if (!res.ok) throw new Error(describeError(res.status, parsed, text));
-  return parsed;
+  const payload = body === undefined ? undefined : JSON.stringify(body);
+
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetchImpl(url, { method, headers, body: payload });
+    const text = await res.text();
+    /** @type {any} */
+    let parsed = {};
+    try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = {}; }
+    if (res.ok) return parsed;
+    if (!RETRY_STATUSES.has(res.status) || attempt >= MAX_ATTEMPTS) throw new Error(describeError(res.status, parsed, text));
+    // Truncated exponential backoff with jitter (Sheets API usage-limits guidance).
+    await wait(Math.min(1000 * 2 ** (attempt - 1) + Math.floor(Math.random() * 1000), MAX_BACKOFF_MS));
+  }
 }
 
 /**
@@ -37,17 +47,8 @@ export async function googleJson(token, method, url, body, fetchImpl = fetch) {
  */
 export function describeError(status, body, raw = "") {
   const message = body.error?.message ?? (raw.slice(0, 200) || "no error body");
-  const info = (body.error?.details ?? []).find((d) => d.reason);
-
-  if (/User has not enabled the Apps Script API/i.test(message)) {
-    return `the Apps Script API is turned off for your account. Turn it on at ${USER_SETTINGS_URL}, wait a minute, then retry.`;
-  }
-  if (info?.reason === "SERVICE_DISABLED" || /has not been used in project .* or it is disabled/i.test(message)) {
-    const service = info?.metadata?.service ?? "the API";
-    const where = info?.metadata?.consumer ? ` in ${info.metadata.consumer}` : "";
-    const link = info?.metadata?.activationUrl ? ` Enable it: ${info.metadata.activationUrl}` : "";
-    return `${service} is not enabled${where} (the OAuth client's Cloud project).${link} Then retry.`;
-  }
   if (status === 401) return `HTTP 401: ${message}. Run \`sheet-kit auth login\`.`;
+  if (status === 403) return `HTTP 403: ${message}. Check that the signed-in account (\`sheet-kit auth status\`) can edit this spreadsheet.`;
+  if (status === 404) return `HTTP 404: ${message}. Check the spreadsheet id.`;
   return `HTTP ${status}: ${message}`;
 }

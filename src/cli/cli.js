@@ -6,12 +6,12 @@
 //   sheet-kit deploy   --project DIR [--script-id ID] [--deployment-id ID]
 //   sheet-kit publish  --artifact DIR --config webhook.json [--expected-latest DATE] [--full] [--profile]
 //   sheet-kit inspect  --spreadsheet-id ID | --config webhook.json  [--sheet NAME] [--range A1] [--cells]
-//   sheet-kit auth     login [--client client_secret.json] [--account EMAIL] [--expect-domain D] [--no-browser] | status | logout
+//   sheet-kit auth     login [--account EMAIL] [--expect-domain D] [--no-browser] [--paste] | status | export-env | logout
 //   sheet-kit version
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { configDir, getAccessToken, isSignedIn, loadToken, login, logout, whoami } from "../google/auth.js";
+import { configDir, credentialSource, getAccessToken, isSignedIn, loadToken, login, loginWithPaste, logout, whoami } from "../google/auth.js";
 import { inspectViaSheetsApi } from "./inspect.js";
 import { compileAppsScript } from "../utils/compiler.js";
 import { deployAppsScript } from "./deploy.js";
@@ -157,37 +157,48 @@ function openBrowser(url) {
   spawn(cmd, [url], { stdio: "ignore", detached: true }).on("error", () => {}).unref();
 }
 
+/** @returns {Promise<string>} */
+async function readStdin() {
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  return Buffer.concat(chunks).toString("utf8").trim();
+}
+
+const AUTH_USAGE = "usage: sheet-kit auth <login [--account EMAIL] [--expect-domain D] [--no-browser] [--paste] | status | export-env | logout>";
+
 /** @param {string[]} args */
 async function cmdAuth(args) {
   const [sub, ...rest] = args;
   const f = flags(rest);
+  const log = (/** @type {string} */ msg) => process.stderr.write(msg + "\n");
   try {
     switch (sub) {
       case "login": {
-        const email = await login({
-          client: f.client,
-          account: f.account,
-          expectDomain: f["expect-domain"],
-          openUrl: f["no-browser"] === "true" ? undefined : openBrowser,
-          log: (msg) => process.stderr.write(msg + "\n"),
-        });
+        const common = { account: f.account, expectDomain: f["expect-domain"] ?? process.env.SHEET_KIT_EXPECT_DOMAIN, log };
+        const email = f.paste === "true"
+          ? await loginWithPaste({ ...common, readPaste: readStdin })
+          : await login({ ...common, openUrl: f["no-browser"] === "true" ? undefined : openBrowser });
         process.stdout.write(`signed in as ${email}\n`);
         return 0;
       }
       case "status": {
-        if (process.env.SHEET_KIT_ACCESS_TOKEN) {
-          process.stdout.write(`${await whoami(process.env.SHEET_KIT_ACCESS_TOKEN)} (from SHEET_KIT_ACCESS_TOKEN)\n`);
-          return 0;
-        }
-        if (!loadToken()) { process.stdout.write(`not signed in (config: ${configDir()})\n`); return 1; }
-        process.stdout.write(`${await whoami(await getAccessToken())} (config: ${configDir()})\n`);
+        const source = credentialSource();
+        if (!source) { process.stdout.write(`not signed in (config: ${configDir()})\n`); return 1; }
+        process.stdout.write(`${await whoami(await getAccessToken())} (${source})\n`);
+        return 0;
+      }
+      case "export-env": {
+        const t = loadToken();
+        if (!t) { log(`auth export-env: not signed in on this machine (config: ${configDir()})`); return 1; }
+        log(`# ${t.email}: keep this secret; it grants Drive and Sheets access as that account.`);
+        process.stdout.write(`SHEET_KIT_REFRESH_TOKEN=${t.refresh_token}\n`);
         return 0;
       }
       case "logout":
         process.stdout.write((await logout()) ? "signed out\n" : "not signed in\n");
         return 0;
       default:
-        process.stderr.write("usage: sheet-kit auth <login|status|logout>\n");
+        log(AUTH_USAGE);
         return 2;
     }
   } catch (error) {

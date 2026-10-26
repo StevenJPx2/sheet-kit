@@ -36,7 +36,7 @@ export async function inspectViaSheetsApi(token, opts, fetchImpl = fetch) {
   if (opts.sheet) params.append("ranges", `'${opts.sheet.replace(/'/g, "''")}'`);
   const url = `${API}/${encodeURIComponent(opts.spreadsheetId)}?${params}`;
   try {
-    return mapSpreadsheet(await googleJson(token, "GET", url, undefined, fetchImpl), opts);
+    return mapSpreadsheet(await googleJson(token, "GET", url, undefined, { fetchImpl }), opts);
   } catch (error) {
     if (opts.sheet && /Unable to parse range/i.test(String(error))) throw new Error(`sheet not found: ${opts.sheet}`);
     throw error;
