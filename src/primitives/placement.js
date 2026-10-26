@@ -21,6 +21,22 @@ export default definePrimitive({
     if (placement.hidden != null && typeof placement.hidden !== "boolean") return "placement.hidden must be a boolean";
     return "";
   },
+  requests(ctx) {
+    const placement = ctx.spec.placement;
+    if (!placement) return [];
+    const out = [];
+    // Move before hiding, as render does. Indexes count "before the move"; the
+    // API ignores a move to the current index (or current + 1), so "last" is a
+    // no-op for a tab that is already last.
+    if (placement.position) {
+      const index = placement.position === "last" ? ctx.sheet.sheetCount : 0;
+      out.push({ updateSheetProperties: { properties: { sheetId: ctx.sheetId, index }, fields: "index" } });
+    }
+    if (typeof placement.hidden === "boolean" && placement.hidden !== ctx.sheet.hidden) {
+      out.push({ updateSheetProperties: { properties: { sheetId: ctx.sheetId, hidden: placement.hidden }, fields: "hidden" } });
+    }
+    return out;
+  },
   render: function (ctx) {
     var placement = ctx.spec.placement;
     if (!placement) return;

@@ -1,4 +1,6 @@
 import { definePrimitive } from "../utils/define-primitive.js";
+import { columnIndex_ } from "../runtime/grid.js";
+import { formatCells, gridRange } from "../render/requests.js";
 
 // numberFormat — apply a Sheets number format ("$0.00", "0.0%", "#,##0", …) to
 // a column's data rows.
@@ -13,6 +15,13 @@ export default definePrimitive({
       if (!columns.has(nf.column)) return `number_format references unknown column ${JSON.stringify(nf.column)}`;
     }
     return "";
+  },
+  requests(ctx) {
+    if (ctx.dataRowCount <= 0) return [];
+    return (ctx.spec.number_formats || []).map((nf) => {
+      const column = columnIndex_(ctx.columns, nf.column);
+      return column > 0 ? formatCells(gridRange(ctx.sheetId, ctx.firstDataRow, column, ctx.dataRowCount, 1), { numberFormat: nf.format }) : null;
+    });
   },
   render: function (ctx) {
     if (ctx.dataRowCount <= 0) return;

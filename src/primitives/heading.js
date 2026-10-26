@@ -1,4 +1,5 @@
 import { definePrimitive } from "../utils/define-primitive.js";
+import { autoResizeRows, dimensionProps, formatCells, gridRange, mergeCells } from "../render/requests.js";
 
 // heading — standalone section headings and stacked sub-table headers.
 //
@@ -19,6 +20,28 @@ export default definePrimitive({
   inputs: function (ctx) { return { styles: ctx.spec.headings || null, w: ctx.width, sections: ctx.sections, headers: ctx.headers }; },
   field: "headings",
   order: 15,
+  requests(ctx) {
+    const styles = ctx.spec.headings || {};
+    const out = [];
+    /** Mirror of render's apply(); `wrap` lets __header__ rows force wrapping. */
+    const apply = (row, style, wrap) => {
+      const range = gridRange(ctx.sheetId, row, 1, 1, ctx.width);
+      const merged = style.merge !== false;
+      if (merged) out.push(mergeCells(range));
+      out.push(formatCells(range, {
+        wrap: wrap ?? merged,
+        bold: style.bold, italic: style.italic, background: style.background,
+        fontColor: style.font_color, fontSize: style.font_size, align: style.align,
+      }));
+      if (style.row_height) out.push(dimensionProps(ctx.sheetId, "ROWS", row, 1, { pixelSize: style.row_height }));
+    };
+    for (const s of ctx.sections) apply(s.row, styles[s.level] || styles.section || { bold: true, background: "#eef5fb" });
+    for (const h of ctx.headers) {
+      apply(h.row, styles.header || { bold: true, background: "#e8eef2", merge: false }, true);
+      out.push(autoResizeRows(ctx.sheetId, h.row, 1));
+    }
+    return out;
+  },
   render: function (ctx) {
     var styles = ctx.spec.headings || {};
 

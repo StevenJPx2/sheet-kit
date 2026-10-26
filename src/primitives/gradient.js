@@ -1,4 +1,6 @@
 import { definePrimitive } from "../utils/define-primitive.js";
+import { columnIndex_, gradientPoints_, gradientRuns_ } from "../runtime/grid.js";
+import { colorStyle, gridRange } from "../render/requests.js";
 
 const GRADIENT_KINDS = new Set(["number", "percent", "percentile", "min", "max"]);
 
@@ -26,6 +28,21 @@ export default definePrimitive({
       if (g.group_by != null && !columns.has(g.group_by)) return `gradient on ${JSON.stringify(g.column)}: unknown group_by column ${JSON.stringify(g.group_by)}`;
     }
     return "";
+  },
+  requests(ctx) {
+    const point = (/** @type {{ color: string, type: string, value?: string }} */ p) =>
+      ({ colorStyle: colorStyle(p.color), type: p.type, ...(p.value != null ? { value: p.value } : {}) });
+    for (const g of ctx.spec.gradients || []) {
+      const column = columnIndex_(ctx.columns, g.column);
+      if (column <= 0) continue;
+      const runs = gradientRuns_(ctx.values, ctx.columns, ctx.firstDataRow, ctx.dataRowCount, g.group_by);
+      const p = gradientPoints_(g);
+      ctx.cfRules.push({
+        ranges: runs.map((run) => gridRange(ctx.sheetId, run.firstRow, column, run.rowCount, 1)),
+        gradientRule: { minpoint: point(p.min), ...(p.mid ? { midpoint: point(p.mid) } : {}), maxpoint: point(p.max) },
+      });
+    }
+    return [];
   },
   render: function (ctx) {
     (ctx.spec.gradients || []).forEach(function (g) {

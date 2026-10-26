@@ -1,0 +1,730 @@
+{
+  "order": [
+    "Daily",
+    "Sheet1",
+    "Stacked",
+    "Log"
+  ],
+  "sheets": {
+    "Daily": {
+      "hidden": false,
+      "frozen": [
+        3,
+        1
+      ],
+      "cells": {
+        "0,0": {
+          "v": "=IF(F4>0.02,\"Above target\",\"Below target\")",
+          "bold": true,
+          "bg": "#fff2cc",
+          "align": "center",
+          "wrap": "WRAP"
+        },
+        "0,1": {
+          "nf": "@",
+          "bold": true,
+          "bg": "#fff2cc",
+          "align": "center",
+          "wrap": "WRAP"
+        },
+        "0,2": {
+          "bold": true,
+          "bg": "#fff2cc",
+          "align": "center",
+          "wrap": "WRAP"
+        },
+        "0,3": {
+          "bold": true,
+          "bg": "#fff2cc",
+          "align": "center",
+          "wrap": "WRAP"
+        },
+        "0,4": {
+          "bold": true,
+          "bg": "#fff2cc",
+          "align": "center",
+          "wrap": "WRAP"
+        },
+        "0,5": {
+          "bold": true,
+          "bg": "#fff2cc",
+          "align": "center",
+          "wrap": "WRAP"
+        },
+        "0,6": {
+          "nf": "@",
+          "bold": true,
+          "bg": "#fff2cc",
+          "align": "center",
+          "wrap": "WRAP"
+        },
+        "1,0": {
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "1,1": {
+          "nf": "@",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "1,2": {
+          "v": "Traffic",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "1,3": {
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "1,4": {
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "1,5": {
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "1,6": {
+          "nf": "@",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "2,0": {
+          "v": "Date",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "2,1": {
+          "nf": "@",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "2,2": {
+          "v": "Sessions",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "2,3": {
+          "v": "Revenue",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "2,4": {
+          "v": "RPV",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "2,5": {
+          "v": "CVR",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "2,6": {
+          "v": "Prev CVR",
+          "nf": "@",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "3,0": {
+          "v": "Rolling 7 days cumulative",
+          "nf": "yyyy-mm-dd",
+          "bold": true,
+          "bg": "#d9eaf7"
+        },
+        "3,1": {
+          "v": "🟢",
+          "nf": "@",
+          "bold": true,
+          "bg": "#d9eaf7"
+        },
+        "3,2": {
+          "v": 700,
+          "bold": true,
+          "bg": "#d9eaf7"
+        },
+        "3,3": {
+          "v": 700,
+          "nf": "$#,##0.00",
+          "bold": true,
+          "bg": "#d9eaf7"
+        },
+        "3,4": {
+          "v": "=IFERROR(D4/C4,\"\")",
+          "bold": true,
+          "bg": "#d9eaf7"
+        },
+        "3,5": {
+          "v": 0.021,
+          "nf": "0.00%",
+          "bold": true,
+          "bg": "#d9eaf7"
+        },
+        "3,6": {
+          "v": "1.90%",
+          "nf": "@",
+          "bold": true,
+          "bg": "#d9eaf7"
+        },
+        "4,0": {
+          "v": "2026-09-14",
+          "nf": "yyyy-mm-dd",
+          "bold": true
+        },
+        "4,1": {
+          "v": "🟢",
+          "nf": "@"
+        },
+        "4,2": {
+          "v": 100
+        },
+        "4,3": {
+          "v": 100,
+          "nf": "$#,##0.00"
+        },
+        "4,4": {
+          "v": "=IFERROR(D5/C5,\"\")"
+        },
+        "4,5": {
+          "v": 0.02,
+          "nf": "0.00%"
+        },
+        "4,6": {
+          "v": "2.10%",
+          "nf": "@"
+        },
+        "5,0": {
+          "v": "2026-09-13",
+          "nf": "yyyy-mm-dd",
+          "bold": true
+        },
+        "5,1": {
+          "v": "🔴",
+          "nf": "@"
+        },
+        "5,2": {
+          "v": 90
+        },
+        "5,3": {
+          "v": 90,
+          "nf": "$#,##0.00"
+        },
+        "5,4": {
+          "v": "=IFERROR(D6/C6,\"\")"
+        },
+        "5,5": {
+          "v": 0.018,
+          "nf": "0.00%"
+        },
+        "5,6": {
+          "v": "1.70%",
+          "nf": "@"
+        },
+        "6,0": {
+          "nf": "yyyy-mm-dd",
+          "bold": true
+        },
+        "6,1": {
+          "nf": "@"
+        },
+        "6,3": {
+          "nf": "$#,##0.00"
+        },
+        "6,4": {
+          "v": "=IFERROR(D7/C7,\"\")"
+        },
+        "6,5": {
+          "nf": "0.00%"
+        },
+        "6,6": {
+          "nf": "@"
+        },
+        "7,0": {
+          "v": "Total",
+          "nf": "yyyy-mm-dd",
+          "bold": true,
+          "size": 12,
+          "color": "#ffffff",
+          "bg": "#000000"
+        },
+        "7,1": {
+          "nf": "@",
+          "size": 12,
+          "color": "#ffffff",
+          "bg": "#000000"
+        },
+        "7,2": {
+          "v": 790,
+          "size": 12,
+          "color": "#ffffff",
+          "bg": "#000000"
+        },
+        "7,3": {
+          "nf": "$#,##0.00",
+          "size": 12,
+          "color": "#ffffff",
+          "bg": "#000000"
+        },
+        "7,4": {
+          "v": "=IFERROR(D8/C8,\"\")",
+          "size": 12,
+          "color": "#ffffff",
+          "bg": "#000000"
+        },
+        "7,5": {
+          "nf": "0.00%",
+          "size": 12,
+          "color": "#ffffff",
+          "bg": "#000000"
+        },
+        "7,6": {
+          "nf": "@",
+          "size": 12,
+          "color": "#ffffff",
+          "bg": "#000000"
+        }
+      },
+      "merges": [
+        "0,0:1,7",
+        "1,2:2,5",
+        "7,0:8,7"
+      ],
+      "rowHeights": {
+        "0": "auto",
+        "1": "auto",
+        "2": "auto",
+        "6": 8
+      },
+      "colWidths": {
+        "0": 220,
+        "1": 40
+      },
+      "hiddenRows": [],
+      "hiddenColumns": [],
+      "cf": [
+        {
+          "ranges": [
+            [
+              4,
+              5,
+              5,
+              1
+            ]
+          ],
+          "gradient": {
+            "min": {
+              "color": "#ea4335",
+              "type": "PERCENTILE",
+              "value": "2"
+            },
+            "mid": {
+              "color": "#ffffff",
+              "type": "NUMBER",
+              "value": "0"
+            },
+            "max": {
+              "color": "#38aa56",
+              "type": "PERCENTILE",
+              "value": "98"
+            }
+          }
+        },
+        {
+          "ranges": [
+            [
+              4,
+              3,
+              5,
+              1
+            ]
+          ],
+          "gradient": {
+            "min": {
+              "color": "#ea4335",
+              "type": "MIN"
+            },
+            "mid": null,
+            "max": {
+              "color": "#34a853",
+              "type": "MAX"
+            }
+          }
+        },
+        {
+          "ranges": [
+            [
+              4,
+              4,
+              2,
+              1
+            ],
+            [
+              6,
+              4,
+              1,
+              1
+            ],
+            [
+              7,
+              4,
+              2,
+              1
+            ]
+          ],
+          "gradient": {
+            "min": {
+              "color": "#ea4335",
+              "type": "PERCENTILE",
+              "value": "2"
+            },
+            "mid": null,
+            "max": {
+              "color": "#34a853",
+              "type": "PERCENTILE",
+              "value": "98"
+            }
+          }
+        },
+        {
+          "ranges": [
+            [
+              1,
+              1,
+              8,
+              7
+            ]
+          ],
+          "when": {
+            "type": "TEXT_EQ",
+            "value": "🔴"
+          },
+          "format": {
+            "bold": false,
+            "italic": false,
+            "strike": false,
+            "bg": "#f4cccc"
+          }
+        },
+        {
+          "ranges": [
+            [
+              4,
+              6,
+              5,
+              1
+            ]
+          ],
+          "when": {
+            "type": "CUSTOM_FORMULA",
+            "value": "=AND($F4<>\"\",$G4<>\"\",ISNUMBER(IFERROR(VALUE(REGEXREPLACE($F4,\"[^0-9.\\-]\",\"\")),\"\")),ISNUMBER(IFERROR(VALUE(REGEXREPLACE($G4,\"[^0-9.\\-]\",\"\")),\"\")),IFERROR(VALUE(REGEXREPLACE($F4,\"[^0-9.\\-]\",\"\")),\"\")>IFERROR(VALUE(REGEXREPLACE($G4,\"[^0-9.\\-]\",\"\")),\"\"))"
+          },
+          "format": {
+            "bold": true,
+            "italic": false,
+            "strike": false,
+            "color": "#137333"
+          }
+        },
+        {
+          "ranges": [
+            [
+              4,
+              7,
+              5,
+              1
+            ]
+          ],
+          "when": {
+            "type": "CUSTOM_FORMULA",
+            "value": "=AND($G4<>\"\",$F4<>\"\",ISNUMBER(IFERROR(VALUE(REGEXREPLACE($G4,\"[^0-9.\\-]\",\"\")),\"\")),ISNUMBER(IFERROR(VALUE(REGEXREPLACE($F4,\"[^0-9.\\-]\",\"\")),\"\")),IFERROR(VALUE(REGEXREPLACE($G4,\"[^0-9.\\-]\",\"\")),\"\")>IFERROR(VALUE(REGEXREPLACE($F4,\"[^0-9.\\-]\",\"\")),\"\"))"
+          },
+          "format": {
+            "bold": true,
+            "italic": false,
+            "strike": false,
+            "color": "#137333"
+          }
+        }
+      ],
+      "charts": [
+        {
+          "ranges": [
+            [
+              3,
+              1,
+              6,
+              1
+            ],
+            [
+              3,
+              6,
+              6,
+              1
+            ],
+            [
+              3,
+              7,
+              6,
+              1
+            ]
+          ],
+          "title": "CVR",
+          "headers": 1,
+          "colors": [
+            "#4285f4",
+            "#db4437"
+          ],
+          "anchor": [
+            2,
+            9
+          ],
+          "size": [
+            920,
+            400
+          ],
+          "showHidden": false
+        }
+      ]
+    },
+    "Sheet1": {
+      "hidden": false,
+      "frozen": [
+        0,
+        0
+      ],
+      "cells": {},
+      "merges": [],
+      "rowHeights": {},
+      "colWidths": {},
+      "hiddenRows": [],
+      "hiddenColumns": [],
+      "cf": [],
+      "charts": []
+    },
+    "Stacked": {
+      "hidden": true,
+      "frozen": [
+        0,
+        0
+      ],
+      "cells": {
+        "0,0": {
+          "v": "Weekly report",
+          "nf": "@",
+          "bold": true,
+          "size": 14,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "0,1": {
+          "bold": true,
+          "size": 14,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "1,0": {
+          "v": "=IF(B4>1,\"up\",\"down\")",
+          "nf": "@",
+          "italic": true,
+          "bg": "#eef5fb",
+          "wrap": "OVERFLOW"
+        },
+        "1,1": {
+          "italic": true,
+          "bg": "#eef5fb",
+          "wrap": "OVERFLOW"
+        },
+        "2,0": {
+          "v": "Key",
+          "nf": "@",
+          "bold": true,
+          "bg": "#e8eef2",
+          "align": "center",
+          "wrap": "WRAP"
+        },
+        "2,1": {
+          "v": "Value",
+          "bold": true,
+          "bg": "#e8eef2",
+          "align": "center",
+          "wrap": "WRAP"
+        },
+        "3,0": {
+          "v": "a",
+          "nf": "@"
+        },
+        "3,1": {
+          "v": 1
+        },
+        "4,0": {
+          "v": "b",
+          "nf": "@"
+        },
+        "4,1": {
+          "v": 2
+        },
+        "5,0": {
+          "v": "Chart",
+          "nf": "@",
+          "wrap": "WRAP"
+        },
+        "5,1": {
+          "wrap": "WRAP"
+        },
+        "6,0": {
+          "v": "Key",
+          "nf": "@",
+          "bold": true,
+          "bg": "#e8eef2",
+          "align": "center",
+          "wrap": "WRAP"
+        },
+        "6,1": {
+          "v": "Value",
+          "bold": true,
+          "bg": "#e8eef2",
+          "align": "center",
+          "wrap": "WRAP"
+        },
+        "7,0": {
+          "v": "2026-09-13",
+          "nf": "@"
+        },
+        "7,1": {
+          "v": 3
+        },
+        "8,0": {
+          "v": "2026-09-14",
+          "nf": "@"
+        },
+        "8,1": {
+          "v": 4
+        }
+      },
+      "merges": [
+        "0,0:1,2",
+        "5,0:6,2"
+      ],
+      "rowHeights": {
+        "0": 30,
+        "2": "auto",
+        "5": 300,
+        "6": "auto"
+      },
+      "colWidths": {},
+      "hiddenRows": [
+        6,
+        7,
+        8
+      ],
+      "hiddenColumns": [
+        0,
+        1
+      ],
+      "cf": [],
+      "charts": [
+        {
+          "ranges": [
+            [
+              7,
+              1,
+              3,
+              1
+            ],
+            [
+              7,
+              2,
+              3,
+              1
+            ]
+          ],
+          "title": null,
+          "headers": 1,
+          "colors": [
+            null
+          ],
+          "anchor": [
+            6,
+            5
+          ],
+          "size": [
+            920,
+            400
+          ],
+          "showHidden": true
+        }
+      ]
+    },
+    "Log": {
+      "hidden": false,
+      "frozen": [
+        0,
+        0
+      ],
+      "cells": {
+        "0,0": {
+          "v": "Date",
+          "nf": "@",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "0,1": {
+          "v": "Orders",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "0,2": {
+          "v": "Notes",
+          "nf": "@",
+          "bold": true,
+          "align": "left",
+          "wrap": "WRAP"
+        },
+        "1,0": {
+          "v": "2026-09-14",
+          "nf": "@"
+        },
+        "1,1": {
+          "v": 12
+        },
+        "1,2": {
+          "nf": "@"
+        },
+        "2,0": {
+          "v": "2026-09-13",
+          "nf": "@"
+        },
+        "2,1": {
+          "v": 9
+        },
+        "2,2": {
+          "nf": "@"
+        }
+      },
+      "merges": [],
+      "rowHeights": {
+        "0": "auto"
+      },
+      "colWidths": {},
+      "hiddenRows": [],
+      "hiddenColumns": [],
+      "cf": [],
+      "charts": []
+    }
+  }
+}

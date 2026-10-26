@@ -1,7 +1,8 @@
 // definePrimitive — the builder every sheet-kit feature is authored with.
 //
 // A primitive is one self-contained module: it owns its manifest field, its
-// schema check (validate), and its Apps Script behaviour (render). The compiler
+// schema check (validate), its Sheets API behaviour (requests, run in Node by
+// src/render/render.js) and its legacy Apps Script behaviour (render). The compiler
 // imports these definitions, includes only the ones a manifest uses, serialises
 // each render into the bundle, and wires the dispatch order. There is no flat
 // contract and no hand-maintained Apps Script — both are produced from these.
@@ -26,12 +27,37 @@
  */
 
 /**
+ * @typedef {Object} ApiCtx
+ * The per-tab context passed to a primitive's `requests` in Node (the Sheets
+ * API renderer). Same layout fields as RenderCtx, but instead of a live sheet
+ * it carries the sheet's id and what the renderer read before rendering.
+ * @property {number}    sheetId
+ * @property {any}       spec
+ * @property {any[]}     columns
+ * @property {any[][]}   values
+ * @property {number}    width
+ * @property {number}    rows
+ * @property {number}    headerRows
+ * @property {number}    firstDataRow
+ * @property {number}    dataRowCount
+ * @property {Array<{row:number, level?:string}>} sections
+ * @property {Array<{row:number}>}                 headers
+ * @property {{ gridRows: number, gridColumns: number, chartIds: number[], hidden: boolean, sheetCount: number }} sheet
+ *   Grid size after this render's resize, the tab's existing chart ids, whether
+ *   it is hidden now, and how many tabs the spreadsheet has.
+ * @property {any[]}     cfRules       ConditionalFormatRule objects; core installs them in order.
+ * @property {string[]}  warnings      Behaviour the API can't reproduce exactly; reported once per publish.
+ */
+
+/**
  * @typedef {Object} PrimitiveSpec
  * @property {string}                              name        Unique; the handler becomes sk_<name>_.
  * @property {string|null}                         [field]     Manifest tab field that triggers inclusion (null = always render).
  * @property {number}                              [order]     Render order, lower first (default 50).
  * @property {(value:any, columns:Set<string>, tab:any)=>string} [validate]  Schema check for this field; "" when valid.
  * @property {(ctx:RenderCtx)=>void}               render      Apps Script behaviour, serialised into the bundle.
+ * @property {(ctx:ApiCtx)=>object[]}              requests    The same behaviour as Sheets API batchUpdate requests
+ *   (runs in Node). Conditional-format rules go on ctx.cfRules instead, as render does.
  * @property {(ctx:RenderCtx)=>any}                [inputs]    Everything render READS other than cell values (spec
  *   fields, dims, section rows, label-match bitmaps). Core hashes it per tab; the step re-runs only when it changes.
  *   Omit = conservative: any layout change re-runs it. Must not touch ctx.sheet.
@@ -47,6 +73,7 @@
  * @property {number}      order
  * @property {string}      fn        Handler function name in the bundle (sk_<name>_).
  * @property {(value:any, columns:Set<string>, tab:any)=>string} validate
+ * @property {(ctx:ApiCtx)=>object[]} requests  Sheets API behaviour (Node).
  * @property {string}      runtime   Apps Script source: `var sk_<name>_ = <render>;`
  */
 
@@ -63,6 +90,9 @@ export function definePrimitive(spec) {
   if (typeof spec.render !== "function") {
     throw new Error(`definePrimitive(${spec.name}): render must be a function`);
   }
+  if (typeof spec.requests !== "function") {
+    throw new Error(`definePrimitive(${spec.name}): requests must be a function`);
+  }
   const fn = `sk_${spec.name}_`;
   return {
     name: spec.name,
@@ -70,6 +100,7 @@ export function definePrimitive(spec) {
     order: spec.order ?? 50,
     fn,
     validate: spec.validate ?? (() => ""),
+    requests: spec.requests,
     runtime: [
       `var ${fn} = ${spec.render.toString()};`,
       spec.inputs ? `${fn}.inputs = ${spec.inputs.toString()};` : "",
